@@ -2,7 +2,7 @@
 
 **A fast, good-looking dock for Windows 11.** Your apps, folders, search, music and system tray in one place at the bottom of the screen — so you never need the taskbar.
 
-**Free to download and use.** If you enjoy it, please consider [supporting development](#support-dg-dock) ♥
+**Free to download and use.** If you enjoy it, please consider [sponsoring development](https://github.com/sponsors/Dippy1234) ♥
 
 ---
 
@@ -39,7 +39,9 @@ Installs just for your account — no administrator password needed. Requires Wi
 
 DG-Dock is made by one person in their spare time and is free for everyone. If it's useful to you, a donation helps keep it going:
 
-- ♥ **Donate:** _(add your GitHub Sponsors / Ko-fi / Buy Me a Coffee link here)_
+- ♥ **[Sponsor DG-Dock on GitHub](https://github.com/sponsors/Dippy1234)** — or use the **♥ Sponsor** button at the top of this page.
+
+Inside the app, the **♥** button in Settings (and Settings › About) takes you there too.
 
 Donations are voluntary gifts and don't change the licence.
 
