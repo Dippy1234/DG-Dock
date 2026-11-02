@@ -2,6 +2,8 @@
 
 **A fast dock for Windows 11.** Your apps, folders, search, music and system tray in one place at the bottom of the screen — so you never need the taskbar.
 
+https://github.com/user-attachments/assets/7439d04d-214e-4c8b-90d3-0eb70fcfe6f7
+
 **Free to download and use.** If you enjoy it, please consider [sponsoring development](https://github.com/sponsors/Dippy1234) ♥
 
 ---
