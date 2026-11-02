@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<style>
+  /* Same look as the dock's hover cards: dock colour, 14px corners, soft white-on-dark
+     highlights (no accent fill), Segoe UI at the dock's sizes, icons on rounded tiles. */
+  :root { --panel:#202022; --fg:#f6f6f8; --fg2:#cdcdd4; --dim:#9696a0;
+    --ink07:rgba(255,255,255,.07); --ink12:rgba(255,255,255,.12); --line:rgba(255,255,255,.07); }
+  .light { --panel:#f3f3f5; --fg:#16161a; --fg2:#3c3c44; --dim:#69696f;
+    --ink07:rgba(0,0,0,.053); --ink12:rgba(0,0,0,.09); --line:rgba(0,0,0,.06); }
+  * { box-sizing:border-box; }
+  html, body { margin:0; overflow:hidden; background:transparent; user-select:none; cursor:default;
+    font:13px/18px "Segoe UI", system-ui, sans-serif; color:var(--fg); }
+  #root { background:var(--panel); border-radius:14px; box-shadow:inset 0 0 0 1px var(--line); padding:8px; }
+  .bar { display:flex; align-items:center; gap:10px; height:44px; padding:0 14px; border-radius:10px; background:var(--ink07); }
+  .bar svg { width:18px; height:18px; flex:none; color:var(--dim); }
+  #q { flex:1; min-width:0; border:0; outline:0; background:transparent; color:var(--fg);
+    font:400 15px "Segoe UI", sans-serif; caret-color:var(--fg); }
+  #q::placeholder { color:var(--dim); }
+  #q::selection { background:var(--ink12); }
+  #list { display:none; padding:6px 0 0; }
+  .has #list { display:block; }
+  .row { display:flex; align-items:center; gap:12px; height:42px; padding:0 8px; border-radius:9px; }
+  .row.sel { background:var(--ink12); }
+  .ic { width:30px; height:30px; flex:none; display:grid; place-items:center; }
+  .ic img { width:30px; height:30px; object-fit:contain; }
+  .ic .g { width:28px; height:28px; border-radius:7px; background:var(--ink07); display:grid; place-items:center;
+    font:15px "Segoe Fluent Icons","Segoe MDL2 Assets"; color:var(--fg2); }
+  .tx { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .tx b { font-weight:400; font-size:13.5px; line-height:18px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tx span { font-size:12px; line-height:15px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .kind { font-size:11.5px; color:var(--dim); flex:none; }
+  .calc .tx b { font:600 21px "Segoe UI", sans-serif; line-height:26px; }
+  .row.calc { height:54px; }
+  mark { background:none; color:inherit; font-weight:600; }
+  .foot { display:none; align-items:center; gap:14px; padding:8px 8px 0; color:var(--dim); font-size:11.5px; }
+  .has .foot { display:flex; }
+  kbd { font:11px "Segoe UI", sans-serif; padding:1px 6px; border-radius:5px; background:var(--ink07); margin-right:5px; }
+  /* popping out of the Start icon: the search field sits nearest the dock */
+  .docked #root { display:flex; flex-direction:column-reverse; box-shadow:none; } /* edge flows into the tail */
+  .docked #list { padding:0 0 6px; }
+  .docked .foot { display:none !important; }
+</style></head>
+<body>
+<div id="root">
+  <div class="bar">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="7" cy="7" r="4.6"/><path d="M10.4 10.4 14 14"/></svg>
+    <input id="q" placeholder="Search apps, settings and files" autocomplete="off" spellcheck="false">
+  </div>
+  <div id="list"></div>
+  <div class="foot" id="foot"><span><kbd>↵</kbd>Open</span><span id="fhint"><kbd>Ctrl ↵</kbd>Show in folder</span><span><kbd>Esc</kbd>Close</span></div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let rows = [], sel = 0, seq = 0;
+
+function hl(title, q) {
+  const t = String(title), i = q ? t.toLowerCase().indexOf(q.toLowerCase()) : -1;
+  if (i < 0 || !q) return esc(t);
+  return esc(t.slice(0, i)) + '<mark>' + esc(t.slice(i, i + q.length)) + '</mark>' + esc(t.slice(i + q.length));
+}
+
+function render() {
+  const q = $('q').value.trim();
+  document.body.classList.toggle('has', rows.length > 0);
+  $('list').innerHTML = rows.map((r, i) => {
+    const ic = r.icon ? `<img src="${r.icon}" alt="">` : `<div class="g">${esc(r.glyph || '')}</div>`;
+    const calc = r.id.startsWith('calc:');
+    return `<div class="row${i === sel ? ' sel' : ''}${calc ? ' calc' : ''}" data-i="${i}">
+      <div class="ic">${ic}</div>
+      <div class="tx"><b>${calc ? esc(r.title) : hl(r.title, q)}</b><span>${esc(r.sub)}</span></div>
+      <div class="kind">${esc(r.kind)}</div></div>`;
+  }).join('');
+  const cur = rows[sel];
+  $('fhint').style.display = cur && cur.file ? '' : 'none';
+}
+
+function move(d) {
+  if (!rows.length) return;
+  sel = (sel + d + rows.length) % rows.length;
+  render();
+  const el = $('list').children[sel];
+  el && el.scrollIntoView({ block: 'nearest' });
+}
+
+async function search() {
+  const my = ++seq, q = $('q').value;
+  const r = await mdSearch(q);
+  if (my !== seq) return; // a newer keystroke already answered
+  rows = r || []; sel = 0; render();
+}
+
+function run(i, alt) {
+  const r = rows[i];
+  if (!r) return;
+  mdRun(r.id, !!alt);
+}
+
+$('q').addEventListener('input', search);
+$('list').addEventListener('mousemove', e => {
+  const row = e.target.closest('.row');
+  if (row && +row.dataset.i !== sel) { sel = +row.dataset.i; render(); }
+});
+$('list').addEventListener('click', e => {
+  const row = e.target.closest('.row');
+  if (row) run(+row.dataset.i, e.ctrlKey);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown') { e.preventDefault(); move(1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1); }
+  else if (e.key === 'Tab') { e.preventDefault(); move(e.shiftKey ? -1 : 1); }
+  else if (e.key === 'Enter') { e.preventDefault(); run(sel, e.ctrlKey); }
+  else if (e.key === 'Escape') {
+    e.preventDefault();
+    if ($('q').value) { $('q').value = ''; search(); } else mdHide();
+  }
+});
+
+let lastH = 0;
+new ResizeObserver(() => {
+  const h = Math.ceil($('root').getBoundingClientRect().height);
+  if (h !== lastH) { lastH = h; window.mdSearchSize && mdSearchSize(h); }
+}).observe($('root'));
+
+async function applyEnv() {
+  const env = await mdEnv();
+  document.documentElement.classList.toggle('light', !env.dark);
+  document.documentElement.classList.toggle('docked', !!env.docked);
+  if (env.panel) document.documentElement.style.setProperty('--panel', env.panel);
+}
+// tell the dock once the colours/layout are applied and painted, so it can show the card
+const ready = () => requestAnimationFrame(() => requestAnimationFrame(() => window.mdReady && mdReady()));
+window.mdShown = async () => { await applyEnv(); $('q').focus(); $('q').select(); if ($('q').value) await search(); ready(); };
+window.mdHidden = () => {};
+applyEnv().then(() => { $('q').focus(); ready(); });
+</script>
+</body></html>

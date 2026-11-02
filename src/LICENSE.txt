@@ -1,0 +1,98 @@
+DG-Dock Licence
+Version 1.0 — November 2026
+
+Copyright (c) 2026 Dippy_drippy. All rights reserved.
+
+DG-Dock is free to download and use. You don't have to pay for it.
+It is not open-source software: the author keeps all rights to it.
+This licence explains what you may and may not do.
+
+
+1. WHAT YOU MAY DO
+
+  a) Download, install and use DG-Dock for free, on as many of your own
+     computers as you like, at home or at work.
+
+  b) Read the source code, learn from it, and build it yourself to run
+     on your own computers.
+
+  c) Tell people about DG-Dock and link to the official download page.
+
+  d) Suggest changes (for example as an issue or pull request on the
+     official GitHub page). See section 4.
+
+
+2. WHAT YOU MAY NOT DO
+
+  Unless the author has given you written permission, you may not:
+
+  a) sell DG-Dock, or charge for it in any way, including as part of a
+     bundle, a paid download, a subscription or a "download service";
+
+  b) share or upload copies of DG-Dock, its installer or its source code
+     anywhere other than the official pages (please link to them instead);
+
+  c) publish, share or sell your own modified version, or a program made
+     from DG-Dock's code;
+
+  d) remove or change the copyright notices, this licence or the
+     "DG-Dock" name in the program;
+
+  e) use the name "DG-Dock", its icon or its logo for anything else, or
+     in a way that suggests the author supports or approves it.
+
+  Forking the code on GitHub to suggest changes is allowed, as GitHub's
+  terms of service describe. That does not give any other rights.
+
+
+3. DONATIONS
+
+  Donations are welcome and always voluntary. A donation is a gift to
+  support development: it doesn't buy a licence, extra rights, features
+  or support, and it isn't refundable.
+
+
+4. YOUR CONTRIBUTIONS
+
+  If you send a change, idea, code, artwork or translation to the
+  project, you confirm it is your own work, and you give the author a
+  free, permanent, worldwide right to use, change, publish and license
+  it as part of DG-Dock or any future version of it — including paid or
+  commercial versions. You keep your own copyright in it.
+
+
+5. FUTURE VERSIONS
+
+  The author may release future versions of DG-Dock under different
+  terms, including as paid software. This licence continues to apply to
+  the versions released under it.
+
+
+6. THIRD-PARTY SOFTWARE
+
+  DG-Dock includes open-source components that are licensed to you under
+  their own licences, listed in THIRD-PARTY-NOTICES.txt. Nothing here
+  limits the rights those licences give you for those components.
+
+
+7. NO WARRANTY
+
+  DG-Dock is provided "as is", without any warranty. To the extent the
+  law allows, the author is not liable for any loss or damage arising
+  from using it. This doesn't affect any rights you have by law that
+  can't be excluded.
+
+
+8. ENDING THIS LICENCE
+
+  If you break these terms, your permission to use DG-Dock ends
+  automatically. To stop using it, uninstall it.
+
+
+9. LAW
+
+  This licence is governed by the law of England and Wales.
+
+
+Questions or permission requests: contact Dippy_drippy through the
+official DG-Dock GitHub page.

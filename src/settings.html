@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --panel: #202020; --footer: rgba(0,0,0,.18);
+    --tile: rgba(255,255,255,.06); --tile-hover: rgba(255,255,255,.09); --tile-border: rgba(255,255,255,.07);
+    --text: #ffffff; --dim: rgba(255,255,255,.62); --track: rgba(255,255,255,.55);
+    --thumb-ring: #454545; --accent: #60cdff; --on-accent: #000; --divider: rgba(255,255,255,.08);
+    --field: rgba(255,255,255,.06); --field-line: rgba(255,255,255,.55);
+    --sb-thin: rgba(255,255,255,.45); --sb-thumb: rgba(255,255,255,.55); --sb-hover: rgba(255,255,255,.68); --sb-active: rgba(255,255,255,.8);
+    --sb-track: rgba(255,255,255,.05);
+    --sb-up: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M4 1.6 7 5.8H1z' fill='%23ffffff' fill-opacity='.62'/%3E%3C/svg%3E");
+    --sb-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M4 6.4 7 2.2H1z' fill='%23ffffff' fill-opacity='.62'/%3E%3C/svg%3E");
+  }
+  .light {
+    --panel: #f3f3f3; --footer: rgba(0,0,0,.035);
+    --tile: rgba(255,255,255,.72); --tile-hover: rgba(249,249,249,.6); --tile-border: rgba(0,0,0,.07);
+    --text: #1b1b1b; --dim: rgba(0,0,0,.6); --track: rgba(0,0,0,.45);
+    --thumb-ring: #ffffff; --accent: #005fb8; --on-accent: #fff; --divider: rgba(0,0,0,.07);
+    --field: rgba(255,255,255,.7); --field-line: rgba(0,0,0,.45);
+    --sb-thin: rgba(0,0,0,.4); --sb-thumb: rgba(0,0,0,.45); --sb-hover: rgba(0,0,0,.58); --sb-active: rgba(0,0,0,.7);
+    --sb-track: rgba(0,0,0,.04);
+    --sb-up: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M4 1.6 7 5.8H1z' fill='%23000000' fill-opacity='.55'/%3E%3C/svg%3E");
+    --sb-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M4 6.4 7 2.2H1z' fill='%23000000' fill-opacity='.55'/%3E%3C/svg%3E");
+  }
+  .acrylic:not(.light) { --panel: rgba(32,32,32,.72); }
+  .acrylic.light { --panel: rgba(243,243,243,.78); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; overflow: hidden; background: transparent; user-select: none; }
+  body { font: 12px/16px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--text); cursor: default; }
+  #panel { background: var(--panel); display: flex; flex-direction: column; }
+  .body { padding: 20px 20px 14px; }
+  .anim { animation: slide .25s cubic-bezier(.1,.9,.2,1); }
+  .anim-back { animation: slideBack .25s cubic-bezier(.1,.9,.2,1); }
+  @keyframes slide { from { transform: translateX(28px); opacity: 0; } }
+  @keyframes slideBack { from { transform: translateX(-28px); opacity: 0; } }
+
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); column-gap: 12px; row-gap: 12px; }
+  .tile { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+  .tile button { width: 100%; height: 48px; border-radius: 5px; border: 1px solid var(--tile-border); background: var(--tile);
+    color: var(--text); display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0; cursor: default; font: inherit;
+    transition: background-color .167s cubic-bezier(0,0,0,1), color .167s, border-color .167s, transform .083s cubic-bezier(0,0,0,1); }
+  .tile button:hover { background: var(--tile-hover); }
+  .tile button:active { transform: scale(.96); }
+  .tile.on button { background: var(--accent); border-color: transparent; color: var(--on-accent); }
+  .tile.on button:hover { filter: brightness(1.08); }
+  .tile svg { width: 16px; height: 16px; flex: none; }
+  .tile svg.chev { width: 11px; height: 11px; }
+  .tile .lbl { font-size: 12px; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .sliders { display: flex; flex-direction: column; gap: 0; padding: 4px 14px; }
+  /* settings list (Windows 11 Settings style): grouped cards of rows with switches */
+  .body { max-height: 640px; overflow-y: auto; }
+  /* Windows 11 overlay-style scroll bar: hidden at rest, a thin line while you scroll or move,
+     and a wider thumb with arrows when the pointer is near it */
+  .body::-webkit-scrollbar, .scroll::-webkit-scrollbar { width: 12px; background: transparent; }
+  .body::-webkit-scrollbar-track, .scroll::-webkit-scrollbar-track { background: transparent; }
+  .body::-webkit-scrollbar-thumb, .scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 6px;
+    border: solid transparent; border-width: 0 5px; background-clip: padding-box; min-height: 32px; }
+  .sba::-webkit-scrollbar-thumb { background-color: var(--sb-thin); }
+  .sbx::-webkit-scrollbar-thumb { background-color: var(--sb-thumb); border-width: 0 3px; }
+  .sbx::-webkit-scrollbar-thumb:hover { background-color: var(--sb-hover); }
+  .sbx::-webkit-scrollbar-thumb:active { background-color: var(--sb-active); }
+  .sbx::-webkit-scrollbar-track { background: var(--sb-track); border-radius: 6px; }
+  .body::-webkit-scrollbar-button:single-button, .scroll::-webkit-scrollbar-button:single-button { height: 12px; background: no-repeat center / 8px 8px; }
+  .sbx::-webkit-scrollbar-button:single-button:vertical:decrement { background-image: var(--sb-up); }
+  .sbx::-webkit-scrollbar-button:single-button:vertical:increment { background-image: var(--sb-down); }
+  .card { background: var(--tile); border: 1px solid var(--tile-border); border-radius: 7px; }
+  .sec { font-size: 12px; font-weight: 600; color: var(--dim); margin: 16px 2px 6px; }
+  .lrow { display: flex; align-items: center; gap: 14px; min-height: 44px; padding: 0 14px; cursor: default;
+    transition: background-color .12s; }
+  .lrow + .lrow { border-top: 1px solid var(--divider); }
+  .lrow:hover { background: var(--tile-hover); }
+  .lrow:first-child { border-radius: 6px 6px 0 0; } .lrow:last-child { border-radius: 0 0 6px 6px; }
+  .lrow:only-child { border-radius: 6px; }
+  .lrow svg.ic { width: 16px; height: 16px; flex: none; }
+  .lrow .t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .lrow .t small { font-size: 11px; color: var(--dim); line-height: 14px; }
+  .lrow .v { color: var(--dim); display: flex; align-items: center; gap: 6px; }
+  .lrow .v svg { width: 11px; height: 11px; }
+  .sw { position: relative; width: 40px; height: 20px; flex: none; border-radius: 10px; border: 1px solid var(--track);
+    transition: background-color .15s, border-color .15s; }
+  .sw::after { content: ""; position: absolute; width: 12px; height: 12px; left: 3px; top: 3px; border-radius: 50%;
+    background: var(--track); transition: transform .18s cubic-bezier(.1,.9,.2,1), width .1s; }
+  .lrow:active .sw::after { width: 15px; }
+  .sw.on { background: var(--accent); border-color: var(--accent); }
+  .sw.on::after { transform: translateX(20px); background: var(--on-accent); }
+  .lrow:active .sw.on::after { transform: translateX(17px); }
+  .srow { display: flex; align-items: center; gap: 14px; height: 36px; }
+  .srow svg { width: 16px; height: 16px; flex: none; }
+  .srow .val { width: 40px; text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; flex: none;
+    font: inherit; font-size: 12px; background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 2px 4px;
+    outline: none; cursor: text; transition: background-color .1s, border-color .1s; }
+  /* the number next to a slider: click it and type a value */
+  .srow .val:hover { background: var(--field); color: var(--text); }
+  .srow .val:focus { background: var(--field); color: var(--text); border-color: var(--tile-border); border-bottom: 2px solid var(--accent); text-align: center; }
+  input[type=range] { -webkit-appearance: none; appearance: none; flex: 1; height: 20px; background: transparent; margin: 0; }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px;
+    background: linear-gradient(to right, var(--accent) var(--p, 50%), var(--track) var(--p, 50%)); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; margin-top: -8px; border-radius: 50%;
+    background: var(--accent); border: 5px solid var(--thumb-ring); box-shadow: 0 0 0 1px rgba(0,0,0,.12); transition: border-width .1s; }
+  input[type=range]:hover::-webkit-slider-thumb { border-width: 4px; }
+  input[type=range]:active::-webkit-slider-thumb { border-width: 6px; }
+
+  .update { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 14px; margin-bottom: 14px; border-radius: 6px;
+    background: var(--tile); border: 1px solid var(--tile-border); }
+  .update svg { width: 16px; height: 16px; flex: none; color: var(--accent); }
+  .update .ut { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .update .ut span { color: var(--dim); font-size: 11px; }
+  .update button { height: 30px; padding: 0 14px; border-radius: 4px; border: none; background: var(--accent); color: var(--on-accent);
+    font: inherit; font-weight: 600; cursor: default; }
+  .update button:hover { filter: brightness(1.08); }
+  .brand .ver { color: var(--dim); margin-left: 4px; }
+  /* sub-pages */
+  #page { display: none; padding: 12px 12px 10px; }
+  .paged #page { display: block; }
+  .paged .body { display: none; }
+  .phead { display: flex; align-items: center; gap: 6px; height: 36px; margin-bottom: 6px; }
+  .phead h3 { margin: 0; font: 600 14px/20px "Segoe UI Variable Display", "Segoe UI", sans-serif; }
+  .list { display: flex; flex-direction: column; gap: 2px; }
+  .scroll { max-height: 330px; overflow-y: auto; padding-right: 2px; }
+  .item { display: flex; align-items: center; gap: 12px; min-height: 36px; padding: 0 10px; border-radius: 5px; border: 0;
+    background: transparent; color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: default; position: relative; width: 100%; }
+  .item:hover { background: var(--tile-hover); }
+  .item.sel { background: var(--tile); }
+  .item.sel::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 2px; background: var(--accent); }
+  .item img { width: 24px; height: 24px; flex: none; }
+  /* Edit Dock: position numbers, page headings, drag to reorder */
+  .item .num { width: 24px; height: 22px; flex: none; margin-right: -4px; border: 0; border-radius: 5px; background: transparent;
+    color: var(--dim); font: 600 11px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; display: grid; place-items: center; cursor: default; }
+  .item button.num:hover { background: var(--tile-hover); color: var(--text); }
+  .item .num.fixed svg { width: 12px; height: 12px; opacity: .55; }
+  .numin { width: 38px; height: 24px; margin-right: -4px; border: 1px solid var(--accent); border-radius: 5px; background: var(--field);
+    color: var(--text); font: 600 11px "Segoe UI", sans-serif; text-align: center; outline: 0; }
+  .numin::-webkit-inner-spin-button { display: none; }
+  .ghead { padding: 10px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: .02em; color: var(--dim); text-transform: uppercase; }
+  .ghead:first-child { padding-top: 2px; }
+  .item .grip { width: 20px; height: 28px; display: grid; place-items: center; color: var(--dim); cursor: grab; touch-action: none; }
+  .item .grip svg { width: 14px; height: 14px; }
+  .item.mov { touch-action: none; }
+  #dockList { position: relative; }
+  .item.dragging { position: relative; z-index: 5; background: var(--tile-hover); box-shadow: 0 8px 22px rgba(0,0,0,.35);
+    transform-origin: center; cursor: grabbing; }
+  .item.dragging img { transform: scale(1.08); transition: transform .12s; }
+  .sorting .item:not(.dragging):hover { background: transparent; }
+  .item.flash { animation: flash .6s ease-out; }
+  @keyframes flash { from { background: color-mix(in srgb, var(--accent) 30%, transparent); } }
+  .item .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .sub { margin-left: auto; color: var(--dim); font-size: 12px; }
+  .item .acts { display: flex; gap: 2px; margin-left: auto; }
+  .pill { border: 0; border-radius: 4px; padding: 4px 10px; font: inherit; font-size: 12px; cursor: default; background: var(--accent); color: var(--on-accent); }
+  .pill.off { background: transparent; color: var(--dim); }
+  .pfoot { margin-top: 8px; padding: 8px 10px 0; border-top: 1px solid var(--divider); display: flex; gap: 16px; flex-wrap: wrap; }
+  .link { background: none; border: 0; color: var(--accent); font: inherit; font-size: 12px; padding: 4px 0; cursor: default; }
+  .link:hover { text-decoration: underline; }
+  .search { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; margin: 0 2px 8px; border-radius: 5px;
+    background: var(--field); border: 1px solid var(--tile-border); border-bottom: 1px solid var(--field-line); }
+  .search:focus-within { border-bottom: 2px solid var(--accent); }
+  .search input { flex: 1; border: 0; outline: none; background: transparent; color: var(--text); font: inherit; font-size: 13px; }
+  .search svg { width: 14px; height: 14px; opacity: .7; }
+  .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+  .cell { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 2px; border-radius: 5px; }
+  .cell:hover { background: var(--tile-hover); }
+  .cell img { width: 40px; height: 40px; }
+  /* icons still loading: a soft rounded tile that pulses, then the icon fades in */
+  img.ph { border-radius: 22%; background: var(--tile-hover); animation: phPulse 1.1s ease-in-out infinite alternate; }
+  img.ph.none { animation: none; opacity: .5; }
+  img.in { animation: phIn .18s ease-out; }
+  @keyframes phPulse { from { opacity: .45; } to { opacity: 1; } }
+  @keyframes phIn { from { opacity: 0; transform: scale(.92); } }
+  .cell span { font-size: 10px; color: var(--dim); max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .empty { color: var(--dim); padding: 14px 10px; text-align: center; }
+
+  footer { height: 48px; background: var(--footer); border-top: 1px solid var(--divider);
+    display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 20px; }
+  .brand { display: flex; align-items: center; gap: 10px; background: none; border: 0; color: var(--text); font: inherit; padding: 4px 6px; margin-left: -6px; border-radius: 5px; cursor: default; }
+  .brand:hover { background: var(--tile-hover); }
+  .about { display: flex; flex-direction: column; gap: 10px; }
+  .about .card { padding: 14px 16px; }
+  .about .big { display: flex; align-items: center; gap: 12px; }
+  .about .big .logo { width: 36px; height: 36px; border-radius: 9px; flex: none; background: linear-gradient(160deg, #ff9a6b, #8a5cf6); position: relative; }
+  .about .big .logo::after { content: ""; position: absolute; background: rgba(255,255,255,.9); }
+  .about .big .logo::after { left: 6px; right: 6px; bottom: 6px; height: 7px; border-radius: 3px; }
+  .about h4 { margin: 0; font: 600 15px/20px "Segoe UI Variable Display", "Segoe UI", sans-serif; }
+  .about .muted { color: var(--dim); font-size: 12px; }
+  .about pre { margin: 0; max-height: 240px; overflow: auto; white-space: pre-wrap; font: 11px/16px "Cascadia Mono", Consolas, monospace; color: var(--dim); user-select: text; }
+  .about .btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+  .brand .logo { width: 18px; height: 18px; border-radius: 5px; background: linear-gradient(160deg, #ff9a6b, #8a5cf6); position: relative; }
+  .brand .logo::after { content: ""; position: absolute; left: 3px; right: 3px; bottom: 3px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.9); }
+  .icon-btn { width: 36px; height: 32px; border-radius: 5px; border: 0; background: transparent; color: var(--text);
+    display: grid; place-items: center; cursor: default; flex: none; }
+  .icon-btn:hover { background: var(--tile-hover); }
+  .icon-btn svg { width: 16px; height: 16px; }
+  .icon-btn.sm { width: 28px; height: 28px; }
+  .icon-btn.sm svg { width: 14px; height: 14px; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <div class="body" id="main">
+    <div class="update" id="update" style="display:none">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13.5h10"/></svg>
+      <div class="ut"><b id="updTitle"></b><span>Settings and icon packs are kept</span></div>
+      <button onclick="mdUpdate()">Update</button>
+    </div>
+    <div class="card sliders">
+      <div class="srow" title="Icon size">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="5" height="5" rx="1.2"/><rect x="9" y="9" width="5" height="5" rx="1.2"/><path d="M9.5 2.5h4v4M13.5 2.5 9 7"/></svg>
+        <input type="range" id="size" min="32" max="96" step="1"><input class="val" id="sizeVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off">
+      </div>
+      <div class="srow" title="Apps per page">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="3" width="13" height="7" rx="2"/><circle cx="6" cy="13" r=".8" fill="currentColor"/><circle cx="10" cy="13" r=".8" fill="currentColor"/></svg>
+        <input type="range" id="per" min="4" max="21" step="1"><input class="val" id="perVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off">
+      </div>
+      <div class="srow" title="Animation speed (5 = normal, lower = slower)">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 11.5a5.5 5.5 0 1 1 11 0"/><path d="M8 11.5 11 6.5"/><circle cx="8" cy="11.5" r=".9" fill="currentColor"/></svg>
+        <input type="range" id="anim" min="1" max="5" step="1"><input class="val" id="animVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off">
+      </div>
+      <div class="srow" title="Magnification" style="display:none">
+        <input type="range" id="mag" min="100" max="250" step="1"><input class="val" id="magVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off">
+      </div>
+    </div>
+    <div id="tiles"></div>
+  </div>
+  <div id="page"></div>
+  <footer>
+    <button class="brand" title="About DG-Dock" onclick="openPage('about')"><div class="logo"></div><span>DG-Dock</span><span class="ver" id="ver"></span></button>
+    <div style="display:flex;gap:2px">
+      <button class="icon-btn" id="donateBtn" title="Support DG-Dock" onclick="mdOpenLink('donate')" style="display:none">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><path d="M8 13.2S2.2 9.9 2.2 6.1A2.9 2.9 0 0 1 8 4.8a2.9 2.9 0 0 1 5.8 1.3C13.8 9.9 8 13.2 8 13.2z"/></svg></button>
+      <button class="icon-btn" title="Edit Dock" onclick="openPage('dock')">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.8 2.7a1.6 1.6 0 0 1 2.3 2.3L5.5 12.6 2.5 13.5l.9-3z"/><path d="M9.6 3.9l2.5 2.5"/></svg></button>
+      <button class="icon-btn" title="Quit DG-Dock" onclick="mdQuit()">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="M8 2v5.5"/><path d="M4.6 4.2a5 5 0 1 0 6.8 0"/></svg></button>
+    </div>
+  </footer>
+</div>
+
+<script>
+let S = null, ENV = { dark: true, acrylic: false }, APPS = [], appIcons = {}, packIcons = {}, ITEMS = [];
+let page = null, pickIdx = -1, pickKey = '', pickName = '', pickPrefill = '';
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+// imgAttr gives an <img> that shows a loading tile until its icon arrives.
+function imgAttr(u) { return u ? `src="${u}"` : `src="${BLANK}" class="ph"`; }
+// Windows 11 scroll bars: a thin line shows while scrolling or moving over a list and fades
+// after a second; near the right edge it widens into a thumb with arrows.
+(() => {
+  const SB = '.body, .scroll';
+  const timers = new WeakMap();
+  function wake(el, near) {
+    el.classList.add('sba'); el.classList.toggle('sbx', near);
+    clearTimeout(timers.get(el));
+    timers.set(el, setTimeout(() => { if (!el.matches(':active')) el.classList.remove('sba', 'sbx'); }, near ? 1600 : 1000));
+  }
+  const canScroll = el => el.scrollHeight > el.clientHeight + 1;
+  document.addEventListener('mousemove', e => {
+    const el = e.target.closest && e.target.closest(SB);
+    if (!el || !canScroll(el)) return;
+    const r = el.getBoundingClientRect();
+    wake(el, r.right - e.clientX <= 16);
+  }, true);
+  document.addEventListener('scroll', e => {
+    const el = e.target; if (el.matches && el.matches(SB)) wake(el, el.classList.contains('sbx'));
+  }, true);
+  document.addEventListener('mouseout', e => {
+    const el = e.target.closest && e.target.closest(SB);
+    if (el && !el.contains(e.relatedTarget)) el.classList.remove('sbx');
+  }, true);
+})();
+function setIcon(img, u) {
+  if (!u) { img.classList.add('none'); return; }
+  if (!img.classList.contains('ph')) { if (img.src !== u) img.src = u; return; }
+  img.onload = () => { img.classList.remove('ph', 'none'); img.classList.add('in'); img.onload = null; };
+  img.src = u;
+}
+const CHEV = '<svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg>';
+const BACK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8H3M7 4 3 8l4 4"/></svg>';
+const SRCH = '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="6" cy="6" r="4.4"/><path d="M9.4 9.4 13 13"/></svg>';
+const I = {
+  smart: '<rect x="1.5" y="2.5" width="9" height="7" rx="1.2"/><rect x="3.5" y="12" width="9" height="2" rx="1"/><path d="M12.5 4.5l1.5 1.5 1.5-1.5"/>',
+  search: '<circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4 14 14"/>',
+  hide: '<path d="M2 8s2.2-4 6-4 6 4 6 4-2.2 4-6 4-6-4-6-4Z"/><circle cx="8" cy="8" r="1.8"/><path d="M2.5 13.5l11-11"/>',
+  taskbar: '<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M1.5 10.5h13M6 12h4"/>',
+  dots: '<rect x="2" y="3" width="12" height="7" rx="2"/><circle cx="5" cy="12.8" r=".7" fill="currentColor"/><circle cx="8" cy="12.8" r=".7" fill="currentColor"/><circle cx="11" cy="12.8" r=".7" fill="currentColor"/>',
+  bounce: '<rect x="5" y="2" width="6" height="6" rx="1.6"/><path d="M3 13.5h10M6 10.5h4"/>',
+  running: '<rect x="1.5" y="3" width="9" height="7" rx="1.3"/><path d="M5.5 12.5h9V6.5"/>',
+  full: '<path d="M2 5.5V2.5h3M14 5.5V2.5h-3M2 10.5v3h3M14 10.5v3h-3"/>',
+  style: '<rect x="1.5" y="9.5" width="8" height="4" rx="2"/><rect x="10.5" y="9.5" width="4" height="4" rx="2"/><path d="M3 6.5h10"/>',
+  pos: '<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><rect x="4" y="10.5" width="8" height="1.5" rx=".75" fill="currentColor"/>',
+  pack: '<rect x="2" y="2" width="5" height="5" rx="1.5"/><rect x="9" y="2" width="5" height="5" rx="1.5"/><rect x="2" y="9" width="5" height="5" rx="1.5"/><rect x="9" y="9" width="5" height="5" rx="1.5"/>',
+  theme: '<circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11A5.5 5.5 0 0 0 8 2.5Z" fill="currentColor"/>',
+  tiles: '<rect x="2.5" y="2.5" width="11" height="11" rx="3.5"/><circle cx="8" cy="8" r="2"/>',
+  start: '<path d="M8 2v6.2"/><path d="M4.9 4.5a5 5 0 1 0 6.2 0"/>',
+  reserve: '<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M1.5 10h13M8 4.5v3.5M6.3 6.3 8 8l1.7-1.7"/>',
+  previews: '<rect x="1.5" y="3" width="6" height="5" rx="1"/><rect x="8.5" y="3" width="6" height="5" rx="1"/><rect x="5" y="10.5" width="6" height="3" rx="1.5"/>',
+  tray: '<path d="M4.5 9.5 8 6l3.5 3.5"/><rect x="2" y="2.5" width="12" height="11" rx="2.5"/>',
+  widgets: '<circle cx="5" cy="5.5" r="3"/><path d="M5 4v1.6l1 .8"/><rect x="9.5" y="3" width="5" height="5" rx="1.2"/><path d="M3 12.5h10"/>',
+  displays: '<rect x="1" y="3" width="8" height="6" rx="1"/><rect x="7" y="6" width="8" height="6" rx="1"/>',
+};
+const svg = p => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+
+const NAMES = {
+  style: { pill: 'Pill', notch: 'Notch', glass: 'Glass' },
+  position: { bottom: 'Bottom', left: 'Left', right: 'Right' },
+  theme: { auto: 'Match Windows', light: 'Light', dark: 'Dark' },
+  iconStyle: { tiles: 'Rounded tiles', original: 'Original icons' },
+};
+const TOGGLES = [
+  ['autoHide', 'hide', 'Auto-hide'],
+  ['smartHide', 'smart', 'Smart hide'],
+  ['startSearch', 'search', 'Start = Search'],
+  ['hideTaskbar', 'taskbar', 'Hide taskbar'],
+  ['indicators', 'dots', 'Indicators'],
+  ['bounce', 'bounce', 'Animations'],
+  ['showRunning', 'running', 'Open apps'],
+  ['hideFullscreen', 'full', 'Full-screen hide'],
+  ['previews', 'previews', 'Previews'],
+  ['widgets', 'widgets', 'Widgets'],
+  ['followMouse', 'displays', 'All displays'],
+  ['reserveSpace', 'reserve', 'Keep space'],
+];
+const PAGES = [
+  ['position', 'pos', s => NAMES.position[s.position]],
+  ['pack', 'pack', s => s.iconPack || 'Icon pack'],
+  ['theme', 'theme', s => NAMES.theme[s.theme]],
+  ['iconStyle', 'tiles', s => NAMES.iconStyle[s.iconStyle]],
+  ['startup', 'start', s => 'Start with Windows'],
+];
+
+function fill(el) { el.style.setProperty('--p', (el.value - el.min) / (el.max - el.min) * 100 + '%'); }
+
+const SECTIONS = [
+  ['Behaviour', [
+    ['autoHide', 'hide', 'Auto-hide', 'Slide the dock away when not in use'],
+    ['smartHide', 'smart', 'Smart hide', 'Only hide when a window covers it'],
+    ['hideTaskbar', 'taskbar', 'Hide the Windows taskbar'],
+    ['hideFullscreen', 'full', 'Hide in full-screen apps'],
+    ['reserveSpace', 'reserve', 'Keep space for the dock', s => s.autoHide ? 'Turning this on turns off Auto-hide' : 'Maximised windows stop above it'],
+    ['startSearch', 'search', 'Start button opens Search'],
+  ]],
+  ['Dock', [
+    ['showRunning', 'running', 'Open apps', 'Unpinned apps get their own pill'],
+    ['indicators', 'dots', 'Running indicators'],
+    ['previews', 'previews', 'Window previews'],
+    ['widgets', 'widgets', 'Widgets', 'Clock, battery and now playing'],
+    ['tray', 'tray', 'System tray', 'Tray apps at the end of the dock'],
+    ['bounce', 'bounce', 'Animations'],
+    ['followMouse', 'displays', 'Show on all displays'],
+  ]],
+  ['Look', [
+    ['position', 'pos', 'Position', s => NAMES.position[s.position]],
+    ['theme', 'theme', 'Appearance', s => NAMES.theme[s.theme]],
+    ['iconStyle', 'tiles', 'Icon style', s => NAMES.iconStyle[s.iconStyle]],
+    ['pack', 'pack', 'Icon pack', s => s.iconPack || 'None'],
+  ]],
+  ['System', [
+    ['startup', 'start', 'Start with Windows'],
+  ]],
+];
+const PAGE_KEYS = new Set(['position', 'theme', 'iconStyle', 'pack']);
+
+function renderTiles() {
+  let h = '';
+  for (const [title, rows] of SECTIONS) {
+    h += `<div class="sec">${title}</div><div class="card">`;
+    for (const [k, ic, lbl, extra] of rows) {
+      const icon = I[ic] ? `<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">${I[ic]}</svg>` : '';
+      if (PAGE_KEYS.has(k)) {
+        h += `<div class="lrow" onclick="openPage('${k}')">${icon}<div class="t">${lbl}</div><div class="v">${esc(extra(S))}${CHEV}</div></div>`;
+      } else {
+        const sx = typeof extra === 'function' && k === 'reserveSpace' ? extra(S) : extra;
+        const sub = typeof sx === 'string' ? `<small>${esc(sx)}</small>` : '';
+        h += `<div class="lrow" onclick="toggle('${k}')">${icon}<div class="t">${lbl}${sub}</div><div class="sw ${S[k] ? 'on' : ''}"></div></div>`;
+      }
+    }
+    h += `</div>`;
+  }
+  $('tiles').innerHTML = h;
+}
+
+function apply() {
+  document.documentElement.classList.toggle('light', !ENV.dark);
+  document.documentElement.classList.toggle('acrylic', !!ENV.acrylic);
+  document.documentElement.style.setProperty('--accent', ENV.accent);
+  document.documentElement.style.setProperty('--on-accent', ENV.onAccent);
+  renderTiles();
+  $('ver').textContent = S.versionName ? S.versionName : S.version ? 'v' + S.version : '';
+  $('ver').title = S.version ? 'Build ' + S.version : '';
+  $('update').style.display = S.update > 0 ? 'flex' : 'none';
+  $('updTitle').textContent = 'Version ' + S.update + ' is ready to install';
+  if (document.activeElement !== $('size')) $('size').value = S.iconSize;
+  if (document.activeElement !== $('mag')) $('mag').value = Math.round(S.magnification * 100);
+  if (document.activeElement !== $('per')) $('per').value = S.perPage > 0 ? S.perPage : 21;
+  if (document.activeElement !== $('anim')) $('anim').value = S.animSpeed || 5;
+  setVal('animVal', S.animSpeed || 5);
+  fill($('size')); fill($('mag')); fill($('per')); fill($('anim'));
+  setVal('perVal', S.perPage > 0 ? S.perPage : 'All');
+  setVal('sizeVal', S.iconSize);
+  setVal('magVal', S.magnification > 1.01 ? Math.round(S.magnification * 100) + '%' : 'Off');
+  reportSize();
+}
+
+const reflowLic = t => t.replace(/([^\n])\n(?!\n| *[a-z]\) | *\d+\. |=)[ \t]*/g, '$1 ');
+async function set(k, v) { S = await mdSet(k, v); apply(); if (page) renderPage(); }
+function toggle(k) { set(k, !S[k]); }
+
+function setVal(id, v) { const e = $(id); if (e && document.activeElement !== e) e.value = v; }
+function typeable(valId, rangeId, key, parse, conv = v => v) {
+  const e = $(valId), r = $(rangeId);
+  let before = '';
+  let fresh = false;
+  e.addEventListener('focus', () => { before = e.value; fresh = true; e.select(); });
+  // keep the whole number selected after the click that focused it, so typing replaces it
+  e.addEventListener('mouseup', ev => { if (fresh) { ev.preventDefault(); e.select(); fresh = false; } });
+  const commit = async () => {
+    const n = parse(e.value.trim());
+    if (!e.value.trim() || isNaN(n)) { e.value = before; return; }
+    before = e.value;
+    const v = Math.round(Math.min(+r.max, Math.max(+r.min, n)));
+    r.value = v; fill(r);
+    S = await mdSet(key, conv(v)); apply();
+  };
+  e.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter') { ev.preventDefault(); e.blur(); }
+    else if (ev.key === 'Escape') { ev.preventDefault(); e.value = before; e.blur(); }
+    else if (ev.key === 'ArrowUp' || ev.key === 'ArrowDown') {
+      ev.preventDefault();
+      const cur = isNaN(parse(e.value)) ? +r.value : parse(e.value);
+      e.value = Math.min(+r.max, Math.max(+r.min, cur + (ev.key === 'ArrowUp' ? 1 : -1)));
+      commit();
+    }
+  });
+  e.addEventListener('blur', async () => { if (e.value !== before) await commit(); apply(); });
+}
+function slider(id, key, conv, show) {
+  let pending = null, busy = false;
+  const send = async () => {
+    if (busy || pending === null) return;
+    busy = true; const v = pending; pending = null;
+    S = await mdSet(key, conv(v)); busy = false;
+    if (pending !== null) send();
+  };
+  $(id).addEventListener('input', e => { fill(e.target); show(+e.target.value); pending = +e.target.value; send(); });
+}
+slider('size', 'iconSize', v => v, v => setVal('sizeVal', v));
+slider('per', 'perPage', v => v > 20 ? 0 : v, v => setVal('perVal', v > 20 ? 'All' : v));
+slider('anim', 'animSpeed', v => v, v => setVal('animVal', v));
+slider('mag', 'magnification', v => v < 108 ? 1 : v / 100, v => setVal('magVal', v < 108 ? 'Off' : v + '%'));
+// typing a number: Enter or clicking away applies it (clamped to the slider's range), Esc cancels
+typeable('sizeVal', 'size', 'iconSize', t => +t);
+typeable('perVal', 'per', 'perPage', t => /^a/i.test(t) ? 21 : +t, v => v > 20 ? 0 : v);
+typeable('animVal', 'anim', 'animSpeed', t => +t);
+typeable('magVal', 'mag', 'magnification', t => /^o/i.test(t) ? 100 : +t.replace('%', ''), v => v < 108 ? 1 : v / 100);
+
+// ---- pages ----
+function head(title, back) {
+  return `<div class="phead"><button class="icon-btn" onclick="${back || 'closePage()'}" title="Back">${BACK}</button><h3>${esc(title)}</h3></div>`;
+}
+function choice(key, title) {
+  const opts = NAMES[key];
+  return head(title) + `<div class="list">` + Object.entries(opts).map(([v, n]) =>
+    `<button class="item ${S[key] === v ? 'sel' : ''}" onclick="set('${key}','${v}')">${esc(n)}</button>`).join('') + `</div>`;
+}
+
+async function renderPage(dir) {
+  const p = $('page');
+  let h = '';
+  switch (page) {
+    case 'style': h = choice('style', 'Dock style'); break;
+    case 'position': h = choice('position', 'Position on screen'); break;
+    case 'theme': h = choice('theme', 'Appearance'); break;
+    case 'iconStyle': h = choice('iconStyle', 'Icon style'); break;
+    case 'pack':
+      h = head('Icon pack') + `<div class="list">` +
+        [['', 'None']].concat((S.packs || []).map(x => [x, x])).map(([v, n]) =>
+          `<button class="item ${S.iconPack === v ? 'sel' : ''}" onclick="set('iconPack', ${JSON.stringify(v).replace(/"/g, '&quot;')})">${esc(n)}</button>`).join('') +
+        `</div><div class="pfoot"><button class="link" onclick="mdPick('pack', -1)">Import an Android icon pack (.apk)…</button></div>`;
+      break;
+    case 'about': {
+      const A = await mdAbout();
+      h = head('About') + `<div class="about">
+        <div class="card big"><div class="logo"></div><div><h4>DG-Dock ${esc(A.name)}</h4>
+          <div class="muted">Build ${esc(A.build)} · © 2026 Dippy_drippy</div>
+          <div class="muted">Free to use. Not to be sold or shared elsewhere.</div></div></div>
+        ${A.donate || A.home ? `<div class="btnrow">${A.donate ? `<button class="pill" onclick="mdOpenLink('donate')">♥ Support DG-Dock</button>` : ''}
+          ${A.home ? `<button class="pill" style="background:var(--tile);color:var(--text)" onclick="mdOpenLink('home')">Official page</button>` : ''}</div>` : ''}
+        <div class="card"><div class="muted" style="margin-bottom:6px;font-weight:600">DG-Dock Licence</div><pre>${esc(reflowLic(A.licence))}</pre></div>
+        <div class="card"><div class="muted" style="margin-bottom:6px;font-weight:600">Open-source components</div><pre>${esc(A.notices)}</pre></div>
+      </div>`;
+      break;
+    }
+    case 'dock':
+      ITEMS = await mdDockItems();
+      h = head('Edit Dock') + `<div class="list scroll" id="dockList">` + ITEMS.map(it => `
+        <div class="item${it.movable ? ' mov' : ''}" data-idx="${it.idx}" data-sec="${it.section}">
+          ${it.movable ? `<button class="num" title="Click to type a new position">0</button>` : `<span class="num fixed" title="Always here">${svg('<path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2M4 7h8v6H4z"/>')}</span>`}
+          <img ${it.icon ? `src="${it.icon}"` : `src="${BLANK}" class="ph none"`}><span class="n">${esc(it.name)}</span><span class="acts">
+          <button class="icon-btn sm" title="Change icon" onclick="changeIcon(${it.idx})">${svg('<path d="M10.8 2.7a1.6 1.6 0 0 1 2.3 2.3L5.5 12.6 2.5 13.5l.9-3z"/>')}</button>
+          ${it.custom ? `<button class="icon-btn sm" title="Reset icon" onclick="resetIcon(${it.idx})">${svg('<path d="M3 8a5 5 0 1 0 1.5-3.5M3 2.5v3h3"/>')}</button>` : ''}
+          ${it.removable ? `<button class="icon-btn sm" title="Remove from Dock" onclick="removePin(${it.idx})">${svg('<path d="M4 4l8 8M12 4l-8 8"/>')}</button>` : ''}
+          ${it.movable ? `<span class="grip" title="Drag to move">${GRIP}</span>` : ''}
+        </span></div>`).join('') + `</div>
+        <div class="pfoot"><button class="link" onclick="openPage('apps')">Add apps…</button>
+        <button class="link" onclick="mdPick('folder', -1)">Add folder…</button>
+        <button class="link" onclick="mdPick('file', -1)">Add program or file…</button></div>`;
+      break;
+    case 'apps':
+      h = head('Add apps', "openPage('dock', true)") + `<div class="search">${SRCH}<input id="q" placeholder="Search apps" spellcheck="false"></div>
+        <div class="list scroll" id="apps"><div class="empty">Loading…</div></div>`;
+      break;
+    case 'picker':
+      const it = ITEMS.find(x => x.idx === pickIdx);
+      const ttl = pickKey ? 'Icon for ' + pickName : it ? 'Icon for ' + it.name : 'Choose an icon';
+      h = head(ttl, pickKey ? "closePage()" : "openPage('dock', true)") + `<div class="search">${SRCH}<input id="q" placeholder="Search icons" spellcheck="false"></div>
+        <div class="grid scroll" id="grid"></div>
+        <div class="pfoot"><button class="link" onclick="pickFile()">Choose from a file…</button>
+        <button class="link" onclick="useOriginal()">Use original</button></div>`;
+      break;
+  }
+  const keep = $('q') && $('q').value;
+  p.innerHTML = h;
+  if (dir) { p.classList.remove('anim', 'anim-back'); void p.offsetWidth; p.classList.add(dir < 0 ? 'anim-back' : 'anim'); }
+  if (page === 'apps') { if (keep) $('q').value = keep; $('q').oninput = renderApps; APPS = await mdApps(); renderApps(); $('q').focus(); }
+  if (page === 'picker') {
+    if (pickPrefill) { $('q').value = pickPrefill; pickPrefill = ''; }
+    $('q').oninput = debounce(renderGrid, 120); renderGrid(); $('q').focus(); $('q').select();
+  }
+  if (page === 'dock') setupDockList();
+  reportSize();
+}
+
+function openPage(p, back) {
+  page = p;
+  document.body.classList.add('paged');
+  renderPage(back ? -1 : 1);
+}
+function closePage() {
+  page = null;
+  document.body.classList.remove('paged');
+  const m = $('main'); m.classList.remove('anim', 'anim-back'); void m.offsetWidth; m.classList.add('anim-back');
+  apply();
+}
+
+const appObs = new IntersectionObserver(es => es.forEach(e => {
+  if (!e.isIntersecting) return; const img = e.target; appObs.unobserve(img); const id = img.dataset.id;
+  if (appIcons[id]) setIcon(img, appIcons[id]); else mdAppIcon(id).then(u => { if (u) appIcons[id] = u; setIcon(img, u); });
+}), { rootMargin: '120px' });
+
+function renderApps() {
+  const box = $('apps'); if (!box) return;
+  const q = $('q').value.trim().toLowerCase();
+  const list = APPS.filter(a => !q || a.name.toLowerCase().includes(q));
+  if (!list.length) { box.innerHTML = `<div class="empty">${APPS.length ? 'No matching apps' : 'No apps found'}</div>`; reportSize(); return; }
+  box.innerHTML = list.map(a => `<div class="item"><img data-id="${esc(a.id)}" ${imgAttr(appIcons[a.id])}><span class="n">${esc(a.name)}</span>
+    <button class="pill ${a.pinned ? 'off' : ''}" data-t="${esc(a.id)}">${a.pinned ? '✓ In Dock' : 'Add'}</button></div>`).join('');
+  box.querySelectorAll('img[data-id]').forEach(i => appObs.observe(i));
+  box.querySelectorAll('button[data-t]').forEach(b => b.onclick = async () => {
+    const pinned = await mdTogglePin(b.dataset.t);
+    const a = APPS.find(x => x.id === b.dataset.t); if (a) a.pinned = pinned; renderApps();
+  });
+  reportSize();
+}
+
+const packObs = new IntersectionObserver(es => es.forEach(e => {
+  if (!e.isIntersecting) return; const img = e.target; packObs.unobserve(img); const n = img.dataset.n;
+  if (packIcons[n]) setIcon(img, packIcons[n]); else mdPackIcon(n).then(u => { if (u) packIcons[n] = u; setIcon(img, u); });
+}), { rootMargin: '160px' });
+
+async function renderGrid() {
+  const g = $('grid'); if (!g) return;
+  const names = await mdPackIcons($('q').value.trim());
+  if (!names || !names.length) { g.innerHTML = '<div class="empty" style="grid-column:1/-1">No icons found</div>'; return; }
+  g.innerHTML = names.map(n => `<div class="cell" data-n="${esc(n)}"><img data-n="${esc(n)}" ${imgAttr(packIcons[n])}><span>${esc(n.replace(/_/g, ' '))}</span></div>`).join('');
+  g.querySelectorAll('img').forEach(i => packObs.observe(i));
+  g.querySelectorAll('.cell').forEach(c => c.onclick = async () => {
+    if (pickKey) { await mdSetKeyIcon(pickKey, c.dataset.n); pickKey = ''; closePage(); return; }
+    await mdSetPackIcon(pickIdx, c.dataset.n); openPage('dock', true);
+  });
+  reportSize();
+}
+
+function debounce(f, ms) { let t; return () => { clearTimeout(t); t = setTimeout(f, ms); }; }
+// picker for a tray app or a file in a folder card (rather than a pinned item)
+function pickFile() { if (pickKey) mdPickKeyFile(pickKey, pickName); else mdPick('icon', pickIdx); }
+async function useOriginal() {
+  if (pickKey) { await mdResetKeyIcon(pickKey); pickKey = ''; closePage(); return; }
+  resetIcon(pickIdx, true);
+}
+async function changeIcon(idx) {
+  pickKey = '';
+  if (!S.iconPack) { mdPick('icon', idx); return; }
+  if (!ITEMS.length) ITEMS = await mdDockItems();
+  pickIdx = idx; openPage('picker');
+}
+async function removePin(i) { await mdRemovePin(i); renderPage(); }
+
+// ---------- Edit Dock: numbers, page headings, hold-and-drag to reorder ----------
+
+const GRIP = '<svg viewBox="0 0 16 16" fill="currentColor"><circle cx="6" cy="4" r="1.1"/><circle cx="10" cy="4" r="1.1"/><circle cx="6" cy="8" r="1.1"/><circle cx="10" cy="8" r="1.1"/><circle cx="6" cy="12" r="1.1"/><circle cx="10" cy="12" r="1.1"/></svg>';
+
+// relabel numbers and put "Page n" / "Folders" headings in the right places
+function labelDockList() {
+  const list = $('dockList'); if (!list) return;
+  list.querySelectorAll('.ghead').forEach(h => h.remove());
+  const per = S.pageSize > 0 ? S.pageSize : (S.perPage > 0 ? S.perPage : 0);
+  const apps = [...list.querySelectorAll('.item[data-sec="0"].mov')];
+  const files = [...list.querySelectorAll('.item[data-sec="1"]')];
+  const paged = per > 0 && apps.length > per;
+  const headBefore = (el, t) => { if (!el) return; const h = document.createElement('div'); h.className = 'ghead'; h.textContent = t; el.before(h); };
+  apps.forEach((el, i) => {
+    el.querySelector('.num').textContent = i + 1;
+    if (paged && i % per === 0) headBefore(el, 'Page ' + (i / per + 1));
+    else if (!paged && i === 0) headBefore(el, 'Apps');
+  });
+  let n = 0;
+  files.forEach(el => { const b = el.querySelector('.num:not(.fixed)'); if (b) b.textContent = ++n; });
+  headBefore(files[0], 'Folders and files');
+}
+
+// FLIP: animate everything that moved after a DOM change
+function flip(list, change) {
+  const kids = [...list.children], before = new Map(kids.map(k => [k, k.getBoundingClientRect().top]));
+  change();
+  for (const k of list.children) {
+    if (k.classList.contains('dragging') || !before.has(k)) continue;
+    const dy = before.get(k) - k.getBoundingClientRect().top;
+    if (!dy) continue;
+    k.style.transition = 'none'; k.style.transform = `translateY(${dy}px)`;
+    requestAnimationFrame(() => { k.style.transition = 'transform .18s cubic-bezier(.2,.8,.2,1)'; k.style.transform = ''; });
+  }
+}
+
+async function saveOrder(sec) {
+  const order = [...$('dockList').querySelectorAll(`.item.mov[data-sec="${sec}"]`)].map(el => +el.dataset.idx);
+  await mdReorder(sec, order);
+  // pin numbers changed: redraw the list once the drop has settled, keeping the scroll spot
+  setTimeout(async () => {
+    const st = $('dockList') ? $('dockList').scrollTop : 0;
+    await renderPage();
+    if ($('dockList')) $('dockList').scrollTop = st;
+  }, 200);
+}
+
+function setupDockList() {
+  const list = $('dockList'); if (!list) return;
+  labelDockList();
+  let drag = null, hold = null;
+  // listen on the window while dragging: moving the row in the page would drop
+  // pointer capture, so the row itself can't be relied on to get the events
+  const onMove = e => drag && move(e);
+  const onUp = () => end();
+  const begin = (el, e) => {
+    drag = { el, sec: el.dataset.sec, grab: e.clientY - el.getBoundingClientRect().top, moved: false };
+    el.classList.add('dragging');
+    list.classList.add('sorting');
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    move(e);
+  };
+  const move = e => {
+    const el = drag.el;
+    const lr = list.getBoundingClientRect();
+    if (e.clientY < lr.top + 28) list.scrollTop -= 8; else if (e.clientY > lr.bottom - 28) list.scrollTop += 8;
+    const py = e.clientY - lr.top + list.scrollTop;   // pointer in list-content coordinates
+    const top = py - drag.grab;                        // where the dragged row's top should be
+    const mid = top + el.offsetHeight / 2;
+    const all = [...list.querySelectorAll(`.item.mov[data-sec="${drag.sec}"]`)];
+    const sibs = all.filter(x => x !== el);
+    let want = sibs.length;                            // rows that should sit above it
+    for (let k = 0; k < sibs.length; k++) {
+      if (mid < sibs[k].offsetTop + sibs[k].offsetHeight / 2) { want = k; break; }
+    }
+    if (want !== all.indexOf(el) && sibs.length) {
+      flip(list, () => {
+        if (want < sibs.length) sibs[want].before(el); else sibs[sibs.length - 1].after(el);
+        labelDockList();
+      });
+      drag.moved = true;
+    }
+    el.style.transform = `translateY(${top - el.offsetTop}px)`; // follow the pointer
+  };
+  const end = () => {
+    clearTimeout(hold); hold = null;
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onUp);
+    if (!drag) return;
+    const { el, sec, moved } = drag; drag = null;
+    el.style.transition = 'transform .16s cubic-bezier(.2,.8,.2,1)'; el.style.transform = '';
+    setTimeout(() => { el.classList.remove('dragging'); el.style.transition = ''; list.classList.remove('sorting'); }, 170);
+    if (moved) saveOrder(+sec);
+  };
+  list.querySelectorAll('.item.mov').forEach(el => {
+    el.addEventListener('pointerdown', e => {
+      if (e.button !== 0 || e.target.closest('button')) return;
+      e.preventDefault();
+      if (e.target.closest('.grip')) { begin(el, e); return; }
+      const x0 = e.clientX, y0 = e.clientY;
+      const cancel = ev => { if (!drag && Math.hypot(ev.clientX - x0, ev.clientY - y0) > 6) { clearTimeout(hold); hold = null; } };
+      const up = () => { clearTimeout(hold); hold = null; window.removeEventListener('pointermove', cancel); window.removeEventListener('pointerup', up); };
+      window.addEventListener('pointermove', cancel);
+      window.addEventListener('pointerup', up);
+      hold = setTimeout(() => { up(); begin(el, { clientY: y0 }); }, 220); // hold to pick up
+    });
+    // click the number to type a position
+    const num = el.querySelector('button.num');
+    num.onclick = () => {
+      const sec = el.dataset.sec;
+      const rows = [...list.querySelectorAll(`.item.mov[data-sec="${sec}"]`)];
+      const inp = document.createElement('input');
+      inp.className = 'numin'; inp.type = 'number'; inp.min = 1; inp.max = rows.length; inp.value = rows.indexOf(el) + 1;
+      num.replaceWith(inp); inp.focus(); inp.select();
+      const done = ok => {
+        if (!inp.isConnected) return;
+        const to = Math.max(1, Math.min(rows.length, parseInt(inp.value, 10) || 0)) - 1;
+        inp.replaceWith(num);
+        if (!ok || to === rows.indexOf(el)) return;
+        const others = rows.filter(r => r !== el);
+        flip(list, () => { if (to < others.length) others[to].before(el); else others[others.length - 1].after(el); labelDockList(); });
+        el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 600);
+        saveOrder(+sec);
+      };
+      inp.onkeydown = ev => { if (ev.key === 'Enter') done(true); else if (ev.key === 'Escape') { ev.stopPropagation(); done(false); } };
+      inp.onblur = () => done(true);
+    };
+  });
+}
+async function resetIcon(i, back) { await mdResetIcon(i); if (back) openPage('dock', true); else renderPage(); }
+
+let lastH = 0;
+function reportSize() {
+  requestAnimationFrame(() => {
+    const h = Math.ceil($('panel').getBoundingClientRect().height);
+    if (h !== lastH) { lastH = h; window.mdPanelSize && mdPanelSize(h); }
+  });
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { if (page) { page === 'apps' || page === 'picker' ? openPage('dock', true) : closePage(); } else mdHide(); }
+});
+
+window.mdRefresh = async () => {
+  if (window.mdAbout && !window.__ab) { window.__ab = await mdAbout(); $('donateBtn').style.display = window.__ab.donate ? '' : 'none'; }
+  ENV = await mdEnv(); S = await mdState(); apply();
+  if (page === 'dock') renderPage();
+};
+window.mdShown = () => { if (page) closePageQuiet(); window.mdRefresh(); };
+function closePageQuiet() { page = null; document.body.classList.remove('paged'); }
+window.mdCheckPending = async () => {
+  const k = await mdTakePendingKey();
+  if (k && k[0]) {
+    pickKey = k[0]; pickName = k[1]; pickIdx = -1;
+    pickPrefill = k[1].replace(/\.[a-z0-9]{1,4}$/i, '');
+    openPage('picker'); return;
+  }
+  const i = await mdTakePending();
+  if (i >= 0) { ITEMS = await mdDockItems(); changeIcon(i); }
+};
+window.mdRefresh().then(() => window.mdCheckPending());
+</script>
+</body>
+</html>

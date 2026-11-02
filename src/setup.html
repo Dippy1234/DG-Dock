@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<style>
+  :root { --bg:#202020; --card:rgba(255,255,255,.05); --card-line:rgba(255,255,255,.07); --text:#fff; --dim:rgba(255,255,255,.62);
+    --accent:#60cdff; --on-accent:#000; --off:rgba(255,255,255,.54); --track-off:transparent; --err-bg:#442726; --err:#ffb4a9; }
+  .light { --bg:#f3f3f3; --card:rgba(255,255,255,.7); --card-line:rgba(0,0,0,.06); --text:#1b1b1b; --dim:rgba(0,0,0,.6);
+    --accent:#005fb8; --on-accent:#fff; --off:rgba(0,0,0,.45); --err-bg:#fde7e9; --err:#c42b1c; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--text); user-select:none; cursor:default;
+    font:14px/20px "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif; }
+  main { height:100%; display:flex; flex-direction:column; padding:28px 28px 22px; }
+  .hero { display:flex; align-items:center; gap:16px; }
+  .hero img { width:60px; height:60px; }
+  h1 { margin:0; font:600 24px/30px "Segoe UI Variable Display","Segoe UI",sans-serif; }
+  .ver { color:var(--dim); font-size:13px; }
+  .lead { color:var(--dim); margin:18px 0 0; font-size:13.5px; }
+  .vers { display:flex; align-items:center; gap:10px; margin-top:16px; font-size:13px; }
+  .pill { padding:3px 10px; border-radius:20px; background:var(--card); border:1px solid var(--card-line); }
+  .pill.new { background:var(--accent); color:var(--on-accent); border-color:transparent; font-weight:600; }
+  .card { margin-top:18px; background:var(--card); border:1px solid var(--card-line); border-radius:7px; }
+  .opt { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 16px; min-height:62px; }
+  .opt + .opt { border-top:1px solid var(--card-line); }
+  .opt small { display:block; color:var(--dim); font-size:12px; line-height:16px; }
+  .switch { position:relative; width:40px; height:20px; flex:none; }
+  .switch input { opacity:0; width:0; height:0; position:absolute; }
+  .switch i { position:absolute; inset:0; border:1px solid var(--off); border-radius:10px; transition:background .15s, border-color .15s; }
+  .switch i::after { content:""; position:absolute; width:12px; height:12px; left:3px; top:3px; border-radius:50%; background:var(--off);
+    transition:transform .15s cubic-bezier(.1,.9,.2,1), width .1s; }
+  .switch:active i::after { width:15px; }
+  .switch input:checked + i { background:var(--accent); border-color:var(--accent); }
+  .switch input:checked + i::after { transform:translateX(20px); background:var(--on-accent); }
+  .agree { display:flex; gap:10px; align-items:flex-start; margin-top:14px; font-size:12.5px; line-height:18px; color:var(--dim); }
+  .agree.need { color:var(--err); }
+  .agree input { width:16px; height:16px; margin:1px 0 0; accent-color:var(--accent); flex:none; }
+  .inl { background:none; border:0; padding:0; min-width:0; height:auto; color:var(--accent); font:inherit; text-decoration:underline; cursor:pointer; }
+  .lic { position:fixed; inset:0; background:var(--bg); display:none; flex-direction:column; padding:22px 28px; z-index:5; }
+  .lic.on { display:flex; }
+  .lic h2 { margin:0 0 10px; font:600 18px "Segoe UI Variable Display","Segoe UI",sans-serif; }
+  .lic pre { flex:1; overflow:auto; margin:0 0 14px; padding:12px 14px; background:var(--card); border:1px solid var(--card-line); border-radius:6px;
+    font:12px/17px "Cascadia Mono",Consolas,monospace; white-space:pre-wrap; user-select:text; }
+  .lic .row { display:flex; justify-content:flex-end; gap:8px; }
+  .where { margin-top:12px; color:var(--dim); font-size:12px; word-break:break-all; }
+  .spacer { flex:1; }
+  .actions { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .btns { display:flex; gap:8px; margin-left:auto; }
+  button { font:inherit; border-radius:4px; height:32px; padding:0 20px; min-width:110px; cursor:default; }
+  button.primary { border:1px solid transparent; background:var(--accent); color:var(--on-accent); font-weight:600; }
+  button.primary:hover { filter:brightness(1.08); }
+  button.primary:disabled { opacity:.7; }
+  button.second { border:1px solid var(--card-line); background:var(--card); color:var(--text); }
+  button.second:hover { filter:brightness(1.15); }
+  button.link { background:none; border:0; color:var(--dim); font-size:12.5px; padding:0; min-width:0; }
+  button.link:hover { color:var(--text); text-decoration:underline; }
+  .err { margin-top:12px; background:var(--err-bg); color:var(--err); border-radius:6px; padding:9px 12px; font-size:12.5px; display:none; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%;
+    animation:sp .7s linear infinite; vertical-align:-2px; margin-right:8px; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  .done { display:none; flex-direction:column; align-items:center; text-align:center; margin-top:44px; }
+  .done .tick { width:64px; height:64px; border-radius:50%; background:var(--accent); color:var(--on-accent); display:grid; place-items:center; margin-bottom:16px; }
+  .done h2 { margin:0 0 6px; font:600 20px "Segoe UI Variable Display","Segoe UI",sans-serif; }
+  .done p { color:var(--dim); margin:0; font-size:13px; }
+  .finished .setup, .finished .actions.main { display:none; }
+  .finished .done { display:flex; } .finished .actions.fin { display:flex; }
+  .actions.fin { display:none; }
+</style></head>
+<body>
+<div class="lic" id="lic"><h2>DG-Dock Licence</h2><pre id="licText"></pre>
+  <div class="row"><button class="second" onclick="closeLicence()">Close</button><button class="primary" onclick="$('accept').checked = true; syncGo(); closeLicence()">I accept</button></div></div>
+<main id="m">
+  <div class="hero">
+    <img src="data:image/png;base64,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" alt="">
+    <div><h1 id="title">DG-Dock</h1><div class="ver" id="ver"></div></div>
+  </div>
+
+  <div class="setup">
+    <p class="lead" id="lead"></p>
+    <div class="vers" id="vers" style="display:none"><span class="pill" id="vOld"></span>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+      <span class="pill new" id="vNew"></span></div>
+    <div class="card" id="opts">
+      <div class="opt"><div>Start with Windows<small>The dock appears when you sign in</small></div>
+        <label class="switch"><input type="checkbox" id="startup"><i></i></label></div>
+      <div class="opt"><div>Desktop shortcut</div>
+        <label class="switch"><input type="checkbox" id="desktop"><i></i></label></div>
+    </div>
+    <label class="agree" id="agree"><input type="checkbox" id="accept"><span>I accept the <button class="inl" onclick="event.preventDefault(); showLicence()">DG-Dock Licence</button> — free to use; not to be sold or shared elsewhere.</span></label>
+    <div class="where" id="where"></div>
+    <div class="err" id="err"></div>
+  </div>
+
+  <div class="done">
+    <div class="tick"><svg width="30" height="30" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg></div>
+    <h2 id="doneTitle">DG-Dock is installed</h2>
+    <p id="doneSub">Find it in Start, or right-click the dock for settings.</p>
+  </div>
+
+  <div class="spacer"></div>
+  <div class="actions main">
+    <button class="link" id="portable" onclick="if ($('accept').checked) mdRunHere(); else { $('agree').classList.add('need'); $('accept').focus(); }">Run without installing</button>
+    <div class="btns">
+      <button class="second" id="secondBtn" style="display:none"></button>
+      <button class="primary" id="go"></button>
+    </div>
+  </div>
+  <div class="actions fin">
+    <div class="btns"><button class="second" onclick="mdFinish(false)">Close</button><button class="primary" onclick="mdFinish(true)">Open DG-Dock</button></div>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let I = null, mode = 'install';
+
+const reflow = t => t.replace(/([^\n])\n(?!\n| *[a-z]\) | *\d+\. |=)[ \t]*/g, '$1 ');
+async function showLicence() { $('licText').textContent = reflow(await mdLicence()); $('lic').classList.add('on'); }
+function closeLicence() { $('lic').classList.remove('on'); }
+// Install stays off until the licence is accepted (updates and reinstalls show it as a note)
+function syncGo() { if (mode === 'install') $('go').disabled = !$('accept').checked; }
+
+function show() {
+  document.documentElement.classList.toggle('light', !I.dark);
+  document.documentElement.style.setProperty('--accent', I.accent);
+  document.documentElement.style.setProperty('--on-accent', I.onAccent);
+  $('ver').textContent = 'Version ' + (I.name || I.version);
+  $('startup').checked = I.startup; $('desktop').checked = I.desktop;
+  $('where').textContent = 'Installs for you only, no admin needed: ' + I.dir;
+  const go = $('go'), second = $('secondBtn');
+  if (!I.installed) {
+    mode = 'install';
+    $('lead').textContent = 'A beautiful dock for Windows 11 — pinned apps and folders, running app dots, previews and widgets.';
+    go.textContent = 'Install';
+    $('accept').onchange = syncGo; syncGo();
+  } else if (I.installed < I.version) {
+    mode = 'update';
+    $('title').textContent = 'Update DG-Dock';
+    $('lead').textContent = 'A new version is ready. Your dock, pins, settings and icon packs stay exactly as they are' + (I.running ? ' — the dock restarts by itself.' : '.');
+    $('vers').style.display = 'flex'; $('vOld').textContent = 'Version ' + I.installed; $('vNew').textContent = 'Version ' + (I.name || I.version);
+    $('opts').style.display = 'none'; $('where').style.display = 'none'; $('portable').style.display = 'none';
+    go.textContent = 'Update';
+    $('agree').innerHTML = '<span>By updating you agree to the <button class="inl" onclick="showLicence()">DG-Dock Licence</button>.</span>';
+  } else if (I.installed === I.version) {
+    mode = 'same';
+    $('lead').textContent = 'This version is already installed.';
+    go.textContent = 'Open DG-Dock'; go.onclick = () => mdOpenInstalled();
+    second.style.display = ''; second.textContent = 'Reinstall'; second.onclick = install;
+    $('agree').style.display = 'none';
+    $('portable').style.display = 'none';
+    return;
+  } else {
+    mode = 'older';
+    $('lead').textContent = 'A newer version (' + I.installed + ') is already installed, so this older file isn’t needed. You can delete it.';
+    $('opts').style.display = 'none'; $('where').style.display = 'none'; $('portable').style.display = 'none';
+    go.textContent = 'Open DG-Dock'; go.onclick = () => mdOpenInstalled();
+    $('agree').style.display = 'none';
+    return;
+  }
+  go.onclick = install;
+}
+
+async function install() {
+  const go = $('go');
+  go.disabled = true; $('secondBtn').disabled = true; $('err').style.display = 'none';
+  go.innerHTML = '<span class="spin"></span>' + (mode === 'update' ? 'Updating…' : 'Installing…');
+  const err = await mdInstall({ startup: $('startup').checked, desktop: $('desktop').checked });
+  if (err) {
+    $('err').textContent = err; $('err').style.display = 'block';
+    go.disabled = false; $('secondBtn').disabled = false; syncGo();
+    go.textContent = mode === 'update' ? 'Try again' : 'Install';
+    return;
+  }
+  if (mode === 'update') { mdFinish(true); return; } // straight back to the dock
+  document.body.classList.add('finished');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('lic').classList.contains('on')) closeLicence();
+  else if (e.key === 'Enter' && !$('go').disabled && !$('lic').classList.contains('on')) $('go').click();
+});
+mdSetupInfo().then(i => { I = i; show(); });
+</script>
+</body></html>
