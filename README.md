@@ -1,6 +1,6 @@
 # DG-Dock
 
-**A fast, good-looking dock for Windows 11.** Your apps, folders, search, music and system tray in one place at the bottom of the screen — so you never need the taskbar.
+**A fast dock for Windows 11.** Your apps, folders, search, music and system tray in one place at the bottom of the screen — so you never need the taskbar.
 
 **Free to download and use.** If you enjoy it, please consider [sponsoring development](https://github.com/sponsors/Dippy1234) ♥
 
