@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<style>
+  /* Launchpad: a card by the dock. A side panel (words, or just icons) on the left:
+     Home (your favourites and recent apps), the categories, All apps. Apps on the right.
+     Same colours, corners and type as the dock's cards and Settings. */
+  :root { --font:"Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; --panel:#202022; --fg:#f4f4f7; --fg2:rgba(255,255,255,.84); --dim:rgba(255,255,255,.66); --ink05:rgba(255,255,255,.045); --ink08:rgba(255,255,255,.08);
+    --ink12:rgba(255,255,255,.12); --ink18:rgba(255,255,255,.18); --line:rgba(255,255,255,.08); --accent:#4cc2ff; --on-accent:#000;
+    --ic:60px; --cw:104px; --cols:6; --star:#f5c542; }
+  .light { --panel:#f3f3f5; --fg:#17171b; --fg2:rgba(0,0,0,.8); --dim:rgba(0,0,0,.6); --ink05:rgba(0,0,0,.035); --ink08:rgba(0,0,0,.06);
+    --ink12:rgba(0,0,0,.09); --ink18:rgba(0,0,0,.13); --line:rgba(0,0,0,.08); --star:#d9a400; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; background:transparent; user-select:none; cursor:default;
+    font:13px/18px var(--font); color:var(--fg); }
+  button { font:inherit; color:inherit; border:0; background:none; padding:0; cursor:default; }
+  svg.i { width:16px; height:16px; flex:none; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
+
+  #card { position:absolute; inset:0; display:flex; gap:12px; padding:12px; background:var(--panel); border-radius:14px; /* the window is clipped to these corners too */
+    box-shadow:inset 0 0 0 1px var(--line); }
+  /* no fade or shrink on the card: the window behind it is solid, so a see-through card showed as an empty dark box (Build 243) */
+  /* grows out of the dock; the content inside lands with a small spring (the window is
+     clipped to the card, so the card itself can't overshoot) */
+  .shown #card > * { animation:settle .42s cubic-bezier(.3,1.5,.5,1); }
+  [data-nospring] .shown #card > * { animation:none; }
+  @keyframes settle { from { transform:scale(.96); opacity:.4; } to { transform:none; opacity:1; } }
+  @media (prefers-reduced-motion:reduce) { .shown #card > * { animation:none; } }
+
+  /* side panel */
+  #side { flex:none; width:172px; display:flex; flex-direction:column; gap:2px; padding:8px; border-radius:12px; background:var(--ink05);
+    box-shadow:inset 0 0 0 1px var(--line); overflow-y:auto; scrollbar-width:none; }
+  #side::-webkit-scrollbar { display:none; }
+  .sbar { display:flex; align-items:center; gap:8px; height:32px; padding:0 10px; border-radius:9px; background:var(--ink08); box-shadow:inset 0 0 0 1px var(--line); flex:none; }
+  .sbar svg { color:var(--dim); width:15px; height:15px; }
+  .sbar input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:var(--fg); font:400 13.5px var(--font); caret-color:var(--fg); }
+  .sbar input::placeholder { color:var(--dim); }
+  #side .sbar { margin:0 0 8px; }
+  .si { position:relative; display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:8px; color:var(--fg2); font-size:13px; flex:none; }
+  .si svg { color:color-mix(in srgb, var(--accent) 80%, var(--dim)); }
+  .si:hover svg { color:var(--accent); }
+  .si:hover { background:var(--ink08); color:var(--fg); }
+  .si.on { background:var(--ink12); color:var(--fg); }
+  .si.on svg { color:var(--accent); }
+  .si.on::before { content:''; position:absolute; left:0; top:8px; bottom:8px; width:3px; border-radius:2px; background:var(--accent); }
+  .si span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .si small { color:var(--dim); font-size:11px; }
+  .si.target { box-shadow:inset 0 0 0 2px var(--accent); }
+  .grow { flex:1; min-height:8px; }
+  .dv { flex:none; height:1px; background:var(--line); margin:4px 6px; }
+  /* icons only */
+  .rail #side { width:52px; padding:8px 6px; align-items:center; }
+  .rail #side .sbar, .rail .si span, .rail .si small { display:none; }
+  .rail .si { justify-content:center; padding:9px; width:38px; }
+  .rail .si svg { width:18px; height:18px; }
+  .rail .si.on::before { left:-6px; }
+  .rail .dv { width:60%; }
+  .si.pwr:hover svg, .si.pwr.open svg { color:#ff6b6b; }
+  .si.pwr.open { background:var(--ink12); color:var(--fg); }
+  #pw { position:fixed; z-index:45; min-width:178px; padding:5px; border-radius:11px; background:var(--panel-solid, var(--panel)); box-shadow:0 0 0 1px var(--line), 0 10px 28px rgba(0,0,0,.35);
+    opacity:0; transform:translateY(6px) scale(.97); transform-origin:left bottom; pointer-events:none; transition:opacity .13s, transform .16s cubic-bezier(.2,.9,.3,1.2); }
+  #pw.on { opacity:1; transform:none; pointer-events:auto; }
+  #pw .pi { display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:7px; font-size:13px; color:var(--fg2); cursor:default; }
+  #pw .pi svg { width:16px; height:16px; color:var(--dim); }
+  #pw .pi:hover, #pw .pi.k { background:var(--ink08); color:var(--fg); }
+  #pw .pi.warn { color:#ff6b6b; } #pw .pi.warn svg { color:#ff6b6b; }
+  #pw .pi.warn:hover { background:rgba(255,107,107,.14); }
+  #pw .pd { height:1px; background:var(--line); margin:4px 6px; }
+  #tip { position:fixed; z-index:40; padding:4px 9px; border-radius:6px; background:var(--panel-solid, var(--panel)); box-shadow:0 0 0 1px var(--line), 0 6px 18px rgba(0,0,0,.3);
+    font-size:12px; pointer-events:none; opacity:0; transition:opacity .12s; white-space:nowrap; }
+  #tip.on { opacity:1; }
+
+  /* the apps */
+  #main { position:relative; flex:1; min-width:0; display:flex; flex-direction:column; }
+  #mtop { flex:none; display:none; margin:0 0 6px; }
+  .rail #mtop { display:block; }
+  #title { flex:none; display:flex; align-items:center; gap:8px; min-height:30px; padding:0 4px 4px 6px; }
+  #title h1 { margin:0; font:600 15px var(--font); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #title input { font:600 15px var(--font); color:var(--fg); background:var(--ink08); border:0; outline:0; border-radius:7px; padding:3px 8px; flex:1; min-width:0; }
+  #title small { color:var(--dim); font-size:12px; }
+  .back { width:28px; height:28px; border-radius:50%; display:grid; place-items:center; background:var(--ink08); color:var(--fg2); flex:none; }
+  .back:hover { background:var(--ink12); color:var(--fg); }
+  .back.target { box-shadow:inset 0 0 0 2px var(--accent); }
+  #scroll { flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; }
+  /* the same Windows 11 overlay scroll bar as Settings: hidden at rest, a thin line while
+     you scroll or move, a wider thumb with arrows when the pointer is near the edge.
+     (No scrollbar-width here: it would switch WebView2 back to the default bar.) */
+  #scroll::-webkit-scrollbar { width:12px; background:transparent; }
+  #scroll::-webkit-scrollbar-track { background:transparent; }
+  #scroll::-webkit-scrollbar-thumb { background:transparent; border-radius:6px; border:solid transparent; border-width:0 5px; background-clip:padding-box; min-height:32px; }
+  #scroll.sba::-webkit-scrollbar-thumb { background-color:var(--sb-thin); }
+  #scroll.sbx::-webkit-scrollbar-thumb { background-color:var(--sb-thumb); border-width:0 3px; }
+  #scroll.sbx::-webkit-scrollbar-thumb:hover { background-color:var(--sb-hover); }
+  #scroll.sbx::-webkit-scrollbar-thumb:active { background-color:var(--sb-active); }
+  #scroll.sbx::-webkit-scrollbar-track { background:var(--sb-track); border-radius:6px; }
+  #scroll::-webkit-scrollbar-button:single-button { height:12px; background:no-repeat center / 8px 8px; }
+  #scroll.sbx::-webkit-scrollbar-button:single-button:vertical:decrement { background-image:var(--sb-up); }
+  #scroll.sbx::-webkit-scrollbar-button:single-button:vertical:increment { background-image:var(--sb-down); }
+  :root { --sb-thin:rgba(255,255,255,.45); --sb-thumb:rgba(255,255,255,.55); --sb-hover:rgba(255,255,255,.68); --sb-active:rgba(255,255,255,.8); --sb-track:rgba(255,255,255,.05);
+    --sb-up:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M4 1.6 7 5.8H1z' fill='%23ffffff' fill-opacity='.62'/%3E%3C/svg%3E");
+    --sb-down:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M4 6.4 7 2.2H1z' fill='%23ffffff' fill-opacity='.62'/%3E%3C/svg%3E"); }
+  .light { --sb-thin:rgba(0,0,0,.4); --sb-thumb:rgba(0,0,0,.45); --sb-hover:rgba(0,0,0,.58); --sb-active:rgba(0,0,0,.7); --sb-track:rgba(0,0,0,.04);
+    --sb-up:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M4 1.6 7 5.8H1z' fill='%23000000' fill-opacity='.55'/%3E%3C/svg%3E");
+    --sb-down:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M4 6.4 7 2.2H1z' fill='%23000000' fill-opacity='.55'/%3E%3C/svg%3E"); }
+  .sec { display:flex; align-items:baseline; justify-content:space-between; padding:10px 6px 4px; font-size:12px; color:var(--dim); }
+  .sec:first-child { padding-top:2px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, var(--cw)); }
+  .app, .fold { position:relative; display:flex; flex-direction:column; align-items:center; gap:5px; border-radius:12px; padding:8px 2px 7px; min-width:0; }
+  .app:hover, .fold:hover { background:var(--ink05); }
+  .app:hover .ico, .fold:hover .ico { transform:scale(1.04); }
+  .app:active .ico, .fold:active .ico { transform:scale(.94); filter:brightness(.85); }
+  .app.sel { background:var(--ink08); }
+  .app.dragging { opacity:.25; }
+  .app.merge .ico, .fold.target .ico { transform:scale(1.1); box-shadow:0 0 0 3px var(--accent); border-radius:24%; }
+  .app.before::before { content:''; position:absolute; left:-2px; top:10px; bottom:26px; width:3px; border-radius:2px; background:var(--accent); }
+  .ico { width:var(--ic); height:var(--ic); transition:transform .12s ease-out, box-shadow .12s; }
+  .ico img { width:100%; height:100%; display:block; pointer-events:none; }
+  .ico .ph { width:100%; height:100%; border-radius:22%; background:var(--ink08); }
+  .nm { max-width:100%; font-size:12px; line-height:16px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 4px; }
+  .nonames .nm { display:none; }
+  .nonames .app, .nonames .fold { padding:7px 2px; }
+  /* a folder: its first four apps on a frosted tile */
+  .fico { width:100%; height:100%; border-radius:24%; background:var(--ink12); box-shadow:inset 0 0 0 1px var(--line); padding:15%;
+    display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:1fr; gap:10%; }
+  .fico img, .fico i { width:100%; height:100%; display:block; border-radius:24%; }
+  .fico i { background:var(--ink08); }
+  /* search results that aren't apps: settings, files, sums, the web */
+  .rows { display:flex; flex-direction:column; gap:1px; padding:0 2px; }
+  .row { display:flex; align-items:center; gap:11px; min-height:40px; padding:5px 10px; border-radius:9px; }
+  .row:hover { background:var(--ink05); }
+  .row.sel { background:var(--ink12); }
+  .row .ri { width:28px; height:28px; flex:none; display:grid; place-items:center; border-radius:7px; background:var(--ink08); color:var(--fg2);
+    font:15px "Segoe Fluent Icons", "Segoe MDL2 Assets"; }
+  .row .ri img { width:28px; height:28px; object-fit:contain; }
+  .row .rt { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .row .rt b { font-weight:400; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .row .rt span { font-size:11.5px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .row .rk { flex:none; font-size:11px; color:var(--dim); }
+  .row.calc .rt b { font:600 20px var(--font); }
+  .app.hit { background:var(--ink08); }
+  .keys { display:flex; gap:14px; padding:10px 8px 2px; font-size:11px; color:var(--dim); }
+  kbd { font:10.5px var(--font); padding:1px 5px; border-radius:4px; background:var(--ink08); margin-right:4px; }
+  /* a folder's drawer: opens under the folder's row, pushing the next row down */
+  .drawer { grid-column:1 / -1; position:relative; margin:6px 0 10px; padding:10px 10px 6px; border-radius:14px; background:var(--ink05);
+    box-shadow:inset 0 0 0 1px var(--line); animation:drawer .22s cubic-bezier(.2,.8,.2,1); }
+  .drawer::before { content:''; position:absolute; top:-7px; left:var(--ax, 50%); width:12px; height:12px; margin-left:-6px; transform:rotate(45deg);
+    background:var(--panel); box-shadow:inset 1px 1px 0 var(--line); }
+  .drawer::after { content:''; position:absolute; top:-7px; left:var(--ax, 50%); width:12px; height:12px; margin-left:-6px; transform:rotate(45deg);
+    background:var(--ink05); box-shadow:inset 1px 1px 0 var(--line); }
+  @keyframes drawer { from { opacity:0; transform:translateY(-6px); clip-path:inset(0 0 60% 0 round 14px); } to { opacity:1; transform:none; clip-path:inset(0 0 0 0 round 14px); } }
+  .drawer .dh { display:flex; align-items:center; gap:8px; padding:0 4px 6px; }
+  .drawer .dh input { flex:1; min-width:0; font:600 13px/20px inherit; font-family:inherit; color:var(--fg); background:transparent; border:0; border-radius:6px; padding:2px 6px; outline:none; }
+  .drawer .dh input:hover, .drawer .dh input:focus { background:var(--ink08); }
+  .drawer .dh small { color:var(--dim); font-size:11.5px; white-space:nowrap; }
+  .drawer .dh .x { width:24px; height:24px; border-radius:50%; display:grid; place-items:center; color:var(--fg2); flex:none; }
+  .drawer .dh .x:hover { background:var(--ink08); color:var(--fg); }
+  .drawer .grid { grid-template-columns:repeat(auto-fill, var(--cw)); }
+  .fold.open .ico { box-shadow:0 0 0 2px var(--accent); border-radius:24%; }
+  .dropslot { display:flex; flex-direction:column; align-items:center; gap:5px; padding:8px 2px 7px; color:var(--dim); }
+  .dropslot .ico { border-radius:24%; border:1.5px dashed var(--line2, rgba(128,128,128,.45)); display:grid; place-items:center; font-size:20px; }
+  .dropslot.target .ico { border-color:var(--accent); color:var(--accent); background:color-mix(in srgb, var(--accent) 12%, transparent); }
+  .outzone .drawer { box-shadow:inset 0 0 0 1px var(--line), 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .hint { grid-column:1 / -1; color:var(--dim); font-size:12px; padding:14px 8px; line-height:17px; }
+  .empty { color:var(--dim); font-size:13.5px; padding:40px 10px; text-align:center; }
+
+  #ghost { position:fixed; left:0; top:0; width:var(--ic); height:var(--ic); pointer-events:none; z-index:20; display:none;
+    transition:width .15s, height .15s; filter:drop-shadow(0 8px 16px rgba(0,0,0,.35)); }
+  #ghost img, #ghost .fico { width:100%; height:100%; }
+  #ghost.dock { width:calc(var(--ic) * .7); height:calc(var(--ic) * .7); }
+  #toast { position:fixed; left:50%; bottom:16px; transform:translateX(-50%); padding:6px 14px; border-radius:999px; background:var(--panel-solid, var(--panel));
+    box-shadow:0 0 0 1px var(--line), 0 6px 18px rgba(0,0,0,.3); font-size:12.5px; opacity:0; transition:opacity .2s; pointer-events:none; z-index:30; }
+  #toast.on { opacity:1; }
+</style></head>
+<body>
+<div id="card">
+  <aside id="side"></aside>
+  <section id="main">
+    <div id="mtop"><div class="sbar"><svg class="i" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.6"/><path d="M10.4 10.4 14 14"/></svg>
+      <input id="tq" placeholder="Search apps, settings and files" spellcheck="false" autocomplete="off"></div></div>
+    <div id="title"></div>
+    <div id="scroll"><div id="content"></div></div>
+  </section>
+</div>
+<div id="tip"></div>
+<div id="toast"></div>
+<div id="pw"></div>
+<div id="ghost"></div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const html = document.documentElement;
+const svg = (d, extra = '') => `<svg class="i" viewBox="0 0 16 16" ${extra}>${d}</svg>`;
+const ICON = {
+  home: '<path d="M8 2.2l1.75 3.6 3.95.55-2.85 2.8.7 3.95L8 11.2l-3.55 1.9.7-3.95-2.85-2.8 3.95-.55z"/>',
+  all: '<rect x="2" y="2" width="5" height="5" rx="1.3"/><rect x="9" y="2" width="5" height="5" rx="1.3"/><rect x="2" y="9" width="5" height="5" rx="1.3"/><rect x="9" y="9" width="5" height="5" rx="1.3"/>',
+  Productivity: '<rect x="2" y="4.5" width="12" height="8.5" rx="1.5"/><path d="M5.5 4.5V3.2c0-.4.3-.7.7-.7h3.6c.4 0 .7.3.7.7v1.3M2 8.5h12"/>',
+  Creative: '<path d="M8 2a6 6 0 1 0 0 12c.9 0 1.2-.7.8-1.4-.5-.8.1-1.6 1-1.6h1.5A2.7 2.7 0 0 0 14 8.3 6.2 6.2 0 0 0 8 2z"/><circle cx="5" cy="7" r=".8"/><circle cx="7.5" cy="4.8" r=".8"/><circle cx="10.5" cy="5.6" r=".8"/>',
+  Internet: '<circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c1.8 1.7 2.6 3.7 2.6 6S9.8 12.3 8 14C6.2 12.3 5.4 10.3 5.4 8S6.2 3.7 8 2z"/>',
+  Social: '<path d="M2.5 4.2c0-.9.7-1.7 1.6-1.7h7.8c.9 0 1.6.8 1.6 1.7v5c0 .9-.7 1.6-1.6 1.6H7l-3 2.7v-2.7h.1c-.9 0-1.6-.7-1.6-1.6z"/>',
+  Media: '<circle cx="8" cy="8" r="6"/><path d="M6.6 5.6v4.8L10.3 8z"/>',
+  Games: '<path d="M4.5 4.5h7a3 3 0 0 1 2.9 3.7l-.6 2.6a1.7 1.7 0 0 1-2.9.7L9.6 10H6.4L5.1 11.5a1.7 1.7 0 0 1-2.9-.7l-.6-2.6a3 3 0 0 1 2.9-3.7z"/><path d="M5 7v2M4 8h2"/><circle cx="10.8" cy="7.3" r=".5"/><circle cx="11.7" cy="8.8" r=".5"/>',
+  AI: '<path d="M8 2c.4 2.6 1.4 3.6 4 4-2.6.4-3.6 1.4-4 4-.4-2.6-1.4-3.6-4-4 2.6-.4 3.6-1.4 4-4z"/><path d="M12.5 10.5c.2 1.1.6 1.5 1.7 1.7-1.1.2-1.5.6-1.7 1.7-.2-1.1-.6-1.5-1.7-1.7 1.1-.2 1.5-.6 1.7-1.7z"/>',
+  Developer: '<path d="M5.5 4.5 2 8l3.5 3.5M10.5 4.5 14 8l-3.5 3.5M9.2 3 6.8 13"/>',
+  Utilities: '<path d="M10.2 2.4a3.4 3.4 0 0 0-3.9 4.5L2.5 10.7a1.4 1.4 0 0 0 2 2l3.8-3.8a3.4 3.4 0 0 0 4.5-3.9l-2 2-1.8-.3-.3-1.8z"/>',
+  System: '<circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.6M8 12.6v1.6M14.2 8h-1.6M3.4 8H1.8M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1M12.4 12.4l-1.1-1.1M4.7 4.7 3.6 3.6"/>',
+  Other: '<circle cx="4" cy="8" r="1"/><circle cx="8" cy="8" r="1"/><circle cx="12" cy="8" r="1"/>',
+  folder: '<path d="M2 4.5c0-.6.5-1 1-1h3.2l1.4 1.5H13c.6 0 1 .4 1 1V12c0 .6-.4 1-1 1H3c-.5 0-1-.4-1-1z"/>',
+  back: '<path d="M10 3.5 5.5 8l4.5 4.5"/>',
+  power: '<path d="M8 2v5.5"/><path d="M4.6 4.3a5 5 0 1 0 6.8 0"/>',
+  sleep: '<path d="M13 9.6A5.5 5.5 0 0 1 6.4 3 5.5 5.5 0 1 0 13 9.6z"/>',
+  restart: '<path d="M13.2 8A5.2 5.2 0 1 1 11.6 4.3"/><path d="M12 1.8v2.8H9.2"/>',
+  lock: '<rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>',
+  signout: '<path d="M9.5 4V3a1 1 0 0 0-1-1h-5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-1"/><path d="M7 8h7M11.5 5.5 14 8l-2.5 2.5"/>',
+};
+const catIcon = n => ICON[n] || ICON.folder;
+
+let ENV = {}, APPS = [], BYID = {}, GROUPS = [], RECENT = [], FAVS = [], ICONS = {};
+let openFolder = null;      // the folder whose drawer is open
+let view = 'home';           // 'home', 'all', a category, or 'folder:Name'
+let flat = [], sel = -1;     // the apps showing, in order (keyboard moves through these)
+const qEl = () => ENV.sidePanel === 'icons' ? $('tq') : $('sq');
+const searching = () => !!(qEl() && qEl().value.trim());
+const isFolder = name => GROUPS.some(g => g.user && g.name === name);
+const folders = () => GROUPS.filter(g => g.user);
+const inFolder = a => isFolder(a.group);
+
+async function init() { await loadEnv(); await reload(); ready(); }
+function ready() { requestAnimationFrame(() => requestAnimationFrame(() => window.mdReady && mdReady())); }
+
+async function loadEnv() {
+  const env = await mdEnv();
+  if (env.look !== ENV.look) ICONS = {};
+  const panelChanged = env.sidePanel !== ENV.sidePanel;
+  ENV = env;
+  const c = html.classList;
+  c.toggle('light', !ENV.dark);
+  c.toggle('nonames', !ENV.names);
+  c.toggle('rail', ENV.sidePanel === 'icons');
+  html.dataset.dock = ENV.dock || 'bottom';
+  if (ENV.cardSpring === false) html.dataset.nospring = '1'; else delete html.dataset.nospring;
+  const ic = ENV.icon || 60;
+  const cw = ENV.names ? Math.max(ic + 44, ic * 1.5) : ic + 22; // the dock sizes the card from the same sum
+  html.style.setProperty('--ic', ic + 'px');
+  html.style.setProperty('--cw', cw + 'px');
+  html.style.setProperty('--cols', ENV.cols || 6);
+  if (ENV.font) html.style.setProperty('--font', `"${ENV.font}", system-ui, sans-serif`);
+  else html.style.removeProperty('--font');
+  html.style.setProperty('--accent', ENV.accent);
+  html.style.setProperty('--on-accent', ENV.onAccent || '#000');
+  { // Colour strength: see-through over the blurred backdrop
+    const p = ENV.panel || '', al = ENV.alpha ?? 1;
+    html.style.setProperty('--panel-solid', p);
+    if (/^#[0-9a-f]{6}$/i.test(p) && al < 1) {
+      const n = parseInt(p.slice(1), 16);
+      html.style.setProperty('--panel', `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${al})`);
+    } else html.style.setProperty('--panel', p);
+  }
+  if (panelChanged) buildSideShell();
+}
+
+function buildSideShell() {
+  $('side').innerHTML = `<div class="sbar">${svg('<circle cx="7" cy="7" r="4.6"/><path d="M10.4 10.4 14 14"/>')}<input id="sq" placeholder="Search" spellcheck="false" autocomplete="off"></div><div id="sideItems" style="display:contents"></div>`;
+  $('sq').addEventListener('input', onSearch);
+}
+$('tq').addEventListener('input', onSearch);
+// search: apps, settings, files, sums and the web, from the dock's search index
+let SR = { q: '', rows: [] }, srSeq = 0, srT = 0, items = [];
+function onSearch() {
+  sel = -1;
+  clearTimeout(srT);
+  if (!searching()) { SR = { q: '', rows: [] }; render(); return; }
+  srT = setTimeout(runQuery, 50);
+}
+async function runQuery() {
+  const q = qEl().value.trim(), seq = ++srSeq;
+  if (!q) return;
+  const rows = await mdSearch(q);
+  if (seq !== srSeq || q !== qEl().value.trim()) return; // a newer search has started
+  SR = { q, rows: rows || [] };
+  sel = -1;
+  render();
+}
+function runItem(it, alt) {
+  if (!it) return;
+  if (it.app) mdRun('app:' + it.app.id, !!alt);
+  else if (it.row) { if (it.row.kind === 'Copy') toast('Copied ' + it.row.title); mdRun(it.row.id, !!alt); }
+}
+
+async function reload() {
+  [APPS, GROUPS, RECENT, FAVS] = await Promise.all([mdApps(), mdGroups(), mdRecent(), mdFavs()]);
+  BYID = {};
+  APPS.forEach(a => BYID[a.id.toLowerCase()] = a);
+  if (view.startsWith('folder:') && !isFolder(view.slice(7))) view = 'home';
+  if (view !== 'home' && view !== 'all' && !view.startsWith('folder:') && !GROUPS.some(g => g.name === view)) view = 'home';
+  render();
+}
+const favApps = () => FAVS.map(f => f.startsWith('folder:') ? (isFolder(f.slice(7)) ? { folder: f.slice(7) } : null) : BYID[f.toLowerCase()]).filter(Boolean);
+const isFav = a => FAVS.some(f => f.toLowerCase() === a.id.toLowerCase());
+// Recent is one row: as many as fit across
+const recentApps = () => RECENT.map(id => BYID[id.toLowerCase()]).filter(Boolean)
+  .slice(0, Math.max(1, Math.floor(($('scroll').clientWidth || 600) / (parseFloat(getComputedStyle(html).getPropertyValue('--cw')) || 104))));
+
+// ---------- drawing ----------
+function renderSide() {
+  const item = (key, icon, label, n) => `<div class="si${view === key && !searching() ? ' on' : ''}" data-v="${esc(key)}" data-tip="${esc(label)}">${svg(icon)}<span>${esc(label)}</span>${n !== undefined ? `<small>${n}</small>` : ''}</div>`;
+  const cats = GROUPS.filter(g => !g.user);
+  $('sideItems').innerHTML = item('home', ICON.home, 'Home')
+    + cats.map(g => item(g.name, catIcon(g.name), g.name)).join('')
+    + `<div class="grow"></div><div class="si pwr${PW.open ? ' open' : ''}" id="pwrBtn" data-tip="Power">${svg(ICON.power)}<span>Power</span></div>`
+    + `<div class="dv"></div>` + item('all', ICON.all, 'All apps', APPS.length);
+}
+
+function tile(a, i) {
+  const u = ICONS[a.id];
+  return `<div class="app${i === sel ? ' sel' : ''}" data-i="${i}" data-id="${esc(a.id)}" title="${esc(a.name)}">
+    <div class="ico">${u ? `<img src="${u}" alt="">` : '<div class="ph"></div>'}</div><div class="nm">${esc(a.name)}</div></div>`;
+}
+function folderIcon(name) {
+  const list = APPS.filter(a => a.group === name);
+  let h = '';
+  for (let k = 0; k < 4; k++) { const a = list[k]; h += a && ICONS[a.id] ? `<img src="${ICONS[a.id]}" alt="">` : '<i></i>'; }
+  return `<div class="fico">${h}</div>`;
+}
+function folderTile(name) {
+  return `<div class="fold" data-folder="${esc(name)}" title="${esc(name)}"><div class="ico">${folderIcon(name)}</div><div class="nm">${esc(name)}</div></div>`;
+}
+const grid = inner => `<div class="grid">${inner}</div>`;
+// how many tiles fit across the content (the grid fills as many as fit)
+function gridCols() {
+  const cw = parseFloat(getComputedStyle(html).getPropertyValue('--cw')) || 104;
+  const w = $('content').clientWidth || $('scroll').clientWidth || 600;
+  return Math.max(1, Math.floor(w / cw));
+}
+// a grid of tiles with the open folder's drawer after the folder's row
+function gridWithDrawer(tiles, names, add) {
+  const at = openFolder ? names.indexOf(openFolder) : -1;
+  if (at < 0) return grid(tiles.join(''));
+  const n = gridCols(), rowEnd = Math.min(tiles.length - 1, Math.floor(at / n) * n + n - 1);
+  const out = tiles.slice();
+  out[at] = out[at].replace('class="fold"', 'class="fold open"');
+  out.splice(rowEnd + 1, 0, drawerHTML(openFolder, (at % n + 0.5) / n, add));
+  return grid(out.join(''));
+}
+function drawerHTML(name, ax, add) {
+  const list = APPS.filter(a => a.group === name);
+  return `<div class="drawer" style="--ax:${(ax * 100).toFixed(2)}%" data-drawer="${esc(name)}">
+    <div class="dh"><input id="fname" value="${esc(name)}" spellcheck="false" title="Rename this folder"><small>${list.length} app${list.length === 1 ? '' : 's'} · drag out to take apps out</small>
+    <button class="x" id="closeDrawer" title="Close">${svg('<path d="M4 4l8 8M12 4l-8 8"/>')}</button></div>
+    <div class="grid">${list.map(add).join('')}<div class="dropslot" data-into="${esc(name)}"><div class="ico">+</div><div class="nm">Drop here</div></div></div></div>`;
+}
+const sec = (label, right = '') => `<div class="sec"><span>${esc(label)}</span><span>${right}</span></div>`;
+
+function render() {
+  renderSide();
+  flat = [];
+  let h = '', title = '';
+  const add = a => { flat.push(a); return tile(a, flat.length - 1); };
+  items = [];
+  if (searching()) {
+    if (SR.q !== qEl().value.trim()) { // still looking
+      $('title').innerHTML = `<h1>Results</h1>`;
+      return;
+    }
+    // apps as icons (two rows at most), then everything else in a list
+    const per = cols() * 2;
+    const apps = SR.rows.filter(x => x.kind === 'App').map(x => {
+      const id = x.id.slice(4), a = BYID[id.toLowerCase()];
+      if (!a && x.icon && !(id in ICONS)) ICONS[id] = x.icon;
+      return a || { id, name: x.title, group: '' };
+    }).slice(0, per);
+    const others = SR.rows.filter(x => x.kind !== 'App');
+    title = `<h1>Results</h1>`;
+    if (sel < 0) sel = 0;
+    apps.forEach(a => { flat.push(a); items.push({ app: a }); });
+    others.forEach(x => items.push({ row: x }));
+    if (apps.length) { h += sec('Apps'); h += grid(apps.map((a, i) => tile(a, i).replace('class="app', `class="app${i === 0 && sel === 0 ? ' hit' : ''}`)).join('')); }
+    if (others.length) {
+      if (apps.length) h += sec('Settings, files and more');
+      h += `<div class="rows">` + others.map((x, k) => {
+        const i = apps.length + k;
+        const ic = x.icon ? `<img src="${x.icon}" alt="">` : esc(x.glyph || '');
+        return `<div class="row${x.kind === 'Copy' ? ' calc' : ''}${i === sel ? ' sel' : ''}" data-r="${i}"><div class="ri">${ic}</div>
+          <div class="rt"><b>${esc(x.title)}</b><span>${esc(x.sub || '')}</span></div><span class="rk">${esc(x.kind === 'Copy' ? 'Enter to copy' : x.kind)}</span></div>`;
+      }).join('') + `</div>`;
+    }
+    h += `<div class="keys"><span><kbd>↑</kbd><kbd>↓</kbd>move</span><span><kbd>Enter</kbd>open</span><span><kbd>Alt</kbd><kbd>Enter</kbd>show in folder</span><span><kbd>Esc</kbd>clear</span></div>`;
+  } else {
+    sel = -1;
+    if (view === 'home') {
+      title = '<h1>Home</h1>';
+      const favs = favApps();
+      h += sec('Favourites');
+      h += favs.length ? gridWithDrawer(favs.map(x => x.folder ? folderTile(x.folder) : add(x)), favs.map(x => x.folder || ''), add)
+        : grid(`<div class="hint">Right-click an app › Add to Favourites, or drag it onto Home. Drag your favourites to put them in order.</div>`);
+      const rec = ENV.recent ? recentApps() : [];
+      if (rec.length) { h += sec('Recent'); h += grid(rec.map(add).join('')); }
+    } else if (view === 'all') {
+      title = `<h1>All apps</h1><small>${APPS.length}</small>`;
+      const f = folders();
+      const rest = APPS.filter(a => !inFolder(a));
+      h = gridWithDrawer(f.map(g => folderTile(g.name)).concat(rest.map(add)), f.map(g => g.name).concat(rest.map(() => '')), add);
+    } else if (view.startsWith('folder:')) {
+      const name = view.slice(7);
+      title = `<button class="back" id="back" title="Back">${svg(ICON.back)}</button><input id="fname" value="${esc(name)}" spellcheck="false" title="Rename this folder">`;
+      const list = APPS.filter(a => a.group === name);
+      h = grid(list.length ? list.map(add).join('') : `<div class="hint">Drag apps here. Drag an app onto the arrow to take it out of the folder.</div>`);
+    } else {
+      const list = APPS.filter(a => a.group === view);
+      title = `<h1>${esc(view)}</h1><small>${list.length}</small>`;
+      h = grid(list.map(add).join(''));
+    }
+  }
+  $('title').innerHTML = title;
+  $('content').innerHTML = h;
+  const fn = $('fname');
+  if (fn) {
+    const inDrawer = !!fn.closest('.drawer');
+    const name = inDrawer ? openFolder : view.slice(7);
+    fn.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') fn.blur(); if (e.key === 'Escape') { fn.value = name; fn.blur(); } };
+    fn.onblur = async () => {
+      const v = fn.value.trim();
+      if (v && v !== name) { const n = await mdRenameFolder(name, v); if (inDrawer) openFolder = n; else view = 'folder:' + n; await reload(); }
+    };
+  }
+  loadIconsFor(flat.slice(0, 48));
+  folders().forEach(g => loadIconsFor(APPS.filter(a => a.group === g.name).slice(0, 4)));
+  observe();
+}
+function go(v) { view = v; openFolder = null; if (qEl()) qEl().value = ''; sel = -1; render(); $('scroll').scrollTop = 0; }
+
+
+// ---------- favourites ----------
+async function saveFavs() { await mdSetFavs(FAVS); }
+function favIndex(key) { return FAVS.findIndex(f => f.toLowerCase() === key.toLowerCase()); }
+
+// ---------- icons ----------
+let loading = false;
+const queue = [];
+async function loadIconsFor(list) {
+  for (const a of list) if (a && !(a.id in ICONS) && !queue.includes(a)) queue.push(a);
+  if (loading) return;
+  loading = true;
+  try {
+    while (queue.length) {
+      const batch = queue.splice(0, 24).filter(a => !(a.id in ICONS));
+      if (!batch.length) continue;
+      const got = await mdIcons(batch.map(a => a.id), batch.map(a => a.name));
+      const touched = new Set();
+      for (const a of batch) {
+        ICONS[a.id] = got[a.id] || '';
+        touched.add(a.group);
+        if (ICONS[a.id]) document.querySelectorAll(`.app[data-id="${CSS.escape(a.id)}"] .ico`).forEach(el => el.innerHTML = `<img src="${ICONS[a.id]}" alt="">`);
+      }
+      touched.forEach(g => document.querySelectorAll(`.fold[data-folder="${CSS.escape(g)}"] .ico`).forEach(el => el.innerHTML = folderIcon(g)));
+    }
+  } finally { loading = false; }
+}
+let io = null;
+function observe() {
+  if (io) io.disconnect();
+  io = new IntersectionObserver(es => {
+    const need = es.filter(e => e.isIntersecting).map(e => flat[+e.target.dataset.i]).filter(Boolean);
+    if (need.length) loadIconsFor(need);
+  }, { root: $('scroll'), rootMargin: '300px' });
+  document.querySelectorAll('#content .app').forEach(el => io.observe(el));
+}
+
+function launch(a) { if (a) mdLaunch(a.id); }
+let toastT = 0;
+function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 1500); }
+
+// the names of the icons in the icons-only panel
+document.addEventListener('pointerover', e => {
+  const s = ENV.sidePanel === 'icons' && !drag && e.target.closest('.si');
+  const tip = $('tip');
+  if (!s) { tip.classList.remove('on'); return; }
+  const r = s.getBoundingClientRect();
+  tip.textContent = s.dataset.tip;
+  tip.style.left = (r.right + 8) + 'px';
+  tip.style.top = (r.top + r.height / 2 - 12) + 'px';
+  tip.classList.add('on');
+});
+
+// ---------- dragging ----------
+// onto the dock: keep it there · onto a category: move it · onto Home: add to Favourites
+// onto another app (hold a moment): make a folder · onto a folder: put it in
+// in Favourites, drop between apps to change the order · onto the back arrow: out of the folder
+let press = null, drag = null, raf = 0, last = null, mergeEl = null, mergeAt = 0, edgeRaf = 0;
+document.addEventListener('pointerdown', e => {
+  if (e.button !== 0 || e.target.closest('input')) return;
+  const t = e.target.closest('.app, .fold');
+  if (t) { press = { x: e.clientX, y: e.clientY, el: t }; t.setPointerCapture(e.pointerId); }
+});
+document.addEventListener('pointermove', e => {
+  if (!press) return;
+  if (!drag && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 6) {
+    const el = press.el;
+    drag = el.dataset.folder ? { folder: el.dataset.folder, el } : { app: flat[+el.dataset.i], el };
+    if (!drag.folder && !drag.app) { drag = null; return; }
+    if (drag.app && el.closest('.drawer')) drag.fromFolder = el.closest('.drawer').dataset.drawer;
+    el.classList.add('dragging');
+    $('ghost').innerHTML = drag.folder ? folderIcon(drag.folder) : ICONS[drag.app.id] ? `<img src="${ICONS[drag.app.id]}" alt="">` : '';
+    $('ghost').style.display = 'block';
+    $('tip').classList.remove('on');
+  }
+  if (drag) moveDrag(e.clientX, e.clientY);
+});
+function clearMarks() { document.querySelectorAll('.target, .merge, .before').forEach(el => el.classList.remove('target', 'merge', 'before')); }
+function moveDrag(x, y) {
+  const g = $('ghost'), w = g.offsetWidth || 60;
+  g.style.transform = `translate(${x - w / 2}px, ${y - w / 2}px)`;
+  last = { x, y };
+  if (drag.app && !raf) raf = requestAnimationFrame(async () => {
+    raf = 0;
+    if (!drag || !last || !drag.app) return;
+    const over = await mdDrag('move', last.x * devicePixelRatio, last.y * devicePixelRatio, drag.app.id);
+    if (drag) g.classList.toggle('dock', over);
+  });
+  const under = document.elementFromPoint(x, y);
+  clearMarks();
+  drag.target = null;
+  const side = under && under.closest('.si[data-v]');
+  const back = under && under.closest('#back');
+  const tileEl = under && under.closest('.app, .fold');
+  const slot = under && under.closest('.dropslot');
+  const inDrawer = under && under.closest('.drawer');
+  document.documentElement.classList.remove('outzone');
+  if (slot && drag.app && drag.app.group !== slot.dataset.into) { slot.classList.add('target'); drag.target = { into: slot.dataset.into }; mergeEl = null; }
+  else if (drag.fromFolder && !inDrawer && !(under && under.closest('.si[data-v]')) && under && under.closest('#scroll')) {
+    // dragged out of the drawer onto the grid: take it out of the folder
+    document.documentElement.classList.add('outzone'); drag.target = { out: true, from: drag.fromFolder }; mergeEl = null;
+  }
+  else if (back && drag.app && view.startsWith('folder:')) { back.classList.add('target'); drag.target = { out: true }; mergeEl = null; }
+  else if (side && drag.app && side.dataset.v !== 'all') {
+    const v = side.dataset.v;
+    if (v === 'home' ? !isFav(drag.app) : v !== drag.app.group) { side.classList.add('target'); drag.target = { side: v }; }
+    mergeEl = null;
+  } else if (tileEl && tileEl !== drag.el) {
+    if (tileEl.dataset.folder && drag.app) { tileEl.classList.add('target'); drag.target = { into: tileEl.dataset.folder }; mergeEl = null; }
+    else if (tileEl.classList.contains('app') && drag.app) {
+      if (mergeEl !== tileEl) { mergeEl = tileEl; mergeAt = performance.now(); }
+      const other = flat[+tileEl.dataset.i];
+      if (performance.now() - mergeAt > 500 && other) { tileEl.classList.add('merge'); drag.target = { merge: other }; }
+      else if (view === 'home' && !searching()) { tileEl.classList.add('before'); drag.target = { before: other.id }; }
+    } else if (view === 'home' && !searching()) {
+      tileEl.classList.add('before');
+      drag.target = { before: tileEl.dataset.folder ? 'folder:' + tileEl.dataset.folder : flat[+tileEl.dataset.i].id };
+    }
+  } else mergeEl = null;
+  // near the top or bottom of the list: scroll it
+  const sc = $('scroll').getBoundingClientRect();
+  cancelAnimationFrame(edgeRaf);
+  const step = () => {
+    if (!drag || !last) return;
+    if (last.y < sc.top + 26 && last.y > sc.top - 10) $('scroll').scrollTop -= 10;
+    else if (last.y > sc.bottom - 26 && last.y < sc.bottom + 10) $('scroll').scrollTop += 10;
+    else return;
+    edgeRaf = requestAnimationFrame(step);
+  };
+  edgeRaf = requestAnimationFrame(step);
+}
+document.addEventListener('pointerup', async e => {
+  if (!press) return;
+  press = null;
+  if (!drag) return; // a click
+  const d = drag; drag = null; mergeEl = null; cancelAnimationFrame(edgeRaf);
+  $('ghost').style.display = 'none'; $('ghost').classList.remove('dock');
+  document.documentElement.classList.remove('outzone');
+  d.el.classList.remove('dragging');
+  clearMarks();
+  eatClick();
+  if (d.app) {
+    const pinned = await mdDrag('end', e.clientX * devicePixelRatio, e.clientY * devicePixelRatio, d.app.id);
+    if (pinned) { toast(d.app.name + ' is in the dock'); await reload(); return; }
+  }
+  const t = d.target;
+  if (!t) return;
+  if (t.out) {
+    await mdSetGroup([d.app.id], [d.app.name], '');
+    if (t.from && view === 'home' && !isFav(d.app)) { FAVS = FAVS.concat([d.app.id]); await saveFavs(); } // so it lands on Home
+    toast('Taken out of ' + (t.from || view.slice(7)));
+  } else if (t.side) {
+    if (t.side === 'home') { FAVS = FAVS.concat([d.app.id]); await saveFavs(); toast('Added to Favourites'); render(); return; }
+    await mdSetGroup([d.app.id], [d.app.name], t.side);
+    toast('Moved to ' + t.side);
+  } else if (t.into) {
+    await mdSetGroup([d.app.id], [d.app.name], t.into);
+    toast('Added to ' + t.into);
+  } else if (t.merge) {
+    const other = t.merge;
+    const n = await mdNewFolder('Folder', [other.id, d.app.id], [other.name, d.app.name]);
+    // the folder takes the place of the app it was dropped on in Favourites
+    const at = favIndex(other.id);
+    FAVS = FAVS.filter(f => f.toLowerCase() !== d.app.id.toLowerCase() && f.toLowerCase() !== other.id.toLowerCase());
+    if (at >= 0 || view === 'home') FAVS.splice(Math.max(0, Math.min(at, FAVS.length)), 0, 'folder:' + n);
+    await saveFavs();
+    await reload();
+    openFolder = null;
+    toggleFolder(n);
+    const fn = $('fname'); if (fn) { fn.focus(); fn.select(); }
+    return;
+  } else if (t.before !== undefined) {
+    // reorder Favourites
+    const key = d.folder ? 'folder:' + d.folder : d.app.id;
+    const from = favIndex(key);
+    let list = FAVS.slice();
+    if (from >= 0) list.splice(from, 1);
+    let to = list.findIndex(f => f.toLowerCase() === String(t.before).toLowerCase());
+    if (to < 0) to = list.length;
+    list.splice(to, 0, from >= 0 ? FAVS[from] : key);
+    FAVS = list;
+    await saveFavs();
+    render();
+    return;
+  }
+  await reload();
+});
+document.addEventListener('pointercancel', () => {
+  if (drag && drag.app) mdDrag('cancel', 0, 0, drag.app.id);
+  if (drag) drag.el.classList.remove('dragging');
+  drag = null; press = null; $('ghost').style.display = 'none'; clearMarks();
+});
+function eatClick() {
+  const stop = ev => { ev.stopPropagation(); ev.preventDefault(); };
+  document.addEventListener('click', stop, { capture: true, once: true });
+  setTimeout(() => document.removeEventListener('click', stop, { capture: true }), 60);
+}
+
+// ---------- scroll bar (as in Settings) ----------
+(() => {
+  const el = $('scroll');
+  let t = 0;
+  const wake = near => {
+    el.classList.add('sba'); el.classList.toggle('sbx', near);
+    clearTimeout(t);
+    t = setTimeout(() => { if (!el.matches(':active')) el.classList.remove('sba', 'sbx'); }, near ? 1600 : 1000);
+  };
+  const canScroll = () => el.scrollHeight > el.clientHeight + 1;
+  el.addEventListener('mousemove', e => { if (canScroll()) wake(el.getBoundingClientRect().right - e.clientX <= 16); });
+  el.addEventListener('scroll', () => wake(el.classList.contains('sbx')));
+  el.addEventListener('mouseleave', () => el.classList.remove('sbx'));
+})();
+
+// ---------- power ----------
+const PW = { open: false, confirm: null, k: -1 };
+const PWR = [
+  { a: 'sleep', t: 'Sleep', i: 'sleep' },
+  { a: 'lock', t: 'Lock', i: 'lock' },
+  { a: 'signout', t: 'Sign out', i: 'signout' },
+  null,
+  { a: 'restart', t: 'Restart', i: 'restart', ask: true },
+  { a: 'shutdown', t: 'Shut down', i: 'power', ask: true },
+];
+function drawPower() {
+  const el = $('pw');
+  let h;
+  if (PW.confirm) {
+    const it = PWR.find(x => x && x.a === PW.confirm);
+    h = `<div class="pi" style="color:var(--dim);font-size:12px">${esc(it.t)} now?</div>`
+      + `<div class="pi warn${PW.k === 0 ? ' k' : ''}" data-pa="${it.a}" data-go="1">${svg(ICON[it.i])}<span>${esc(it.t)}</span></div>`
+      + `<div class="pi${PW.k === 1 ? ' k' : ''}" data-pc="1">${svg(ICON.back)}<span>Cancel</span></div>`;
+  } else {
+    let n = 0;
+    h = PWR.map(x => x ? `<div class="pi${x.ask ? ' warn' : ''}${PW.k === n++ ? ' k' : ''}" data-pa="${x.a}">${svg(ICON[x.i])}<span>${esc(x.t)}</span></div>` : '<div class="pd"></div>').join('');
+  }
+  el.innerHTML = h;
+}
+function openPower(on) {
+  PW.open = on; PW.confirm = null; PW.k = -1;
+  const btn = $('pwrBtn'), el = $('pw');
+  if (btn) btn.classList.toggle('open', on);
+  if (!on) { el.classList.remove('on'); return; }
+  drawPower();
+  const r = btn.getBoundingClientRect();
+  el.style.left = Math.round(r.right + 8) + 'px';
+  el.style.top = 'auto';
+  el.style.bottom = Math.max(8, Math.round(innerHeight - r.bottom)) + 'px';
+  requestAnimationFrame(() => el.classList.add('on'));
+}
+function powerItems() { return [...$('pw').querySelectorAll('.pi[data-pa], .pi[data-pc]')]; }
+function doPower(a, confirmed) {
+  const it = PWR.find(x => x && x.a === a);
+  if (!it) return;
+  if (it.ask && !confirmed) { PW.confirm = a; PW.k = 0; drawPower(); return; }
+  openPower(false);
+  mdPower(a);
+}
+$('pw').addEventListener('click', e => {
+  e.stopPropagation();
+  const c = e.target.closest('[data-pc]');
+  if (c) { PW.confirm = null; PW.k = -1; drawPower(); return; }
+  const p = e.target.closest('[data-pa]');
+  if (p) doPower(p.dataset.pa, !!p.dataset.go);
+});
+$('pw').addEventListener('pointerdown', e => e.stopPropagation());
+$('pw').addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); });
+document.addEventListener('pointerdown', e => { if (PW.open && !e.target.closest('#pw, #pwrBtn')) openPower(false); }, true);
+window.addEventListener('blur', () => { if (PW.open) openPower(false); });
+
+// ---------- clicks and keys ----------
+document.addEventListener('click', e => {
+  if (e.target.closest('#pwrBtn')) { openPower(!PW.open); return; }
+  const rw = e.target.closest('.row[data-r]');
+  if (rw) { runItem(items[+rw.dataset.r], e.altKey); return; }
+  const t = e.target.closest('.app');
+  if (t) { if (searching()) runItem({ app: flat[+t.dataset.i] }); else launch(flat[+t.dataset.i]); return; }
+  const f = e.target.closest('.fold');
+  if (f) { toggleFolder(f.dataset.folder); return; }
+  if (e.target.closest('#closeDrawer')) { toggleFolder(null); return; }
+  if (e.target.closest('#back')) { go('home'); return; }
+  const s = e.target.closest('.si[data-v]');
+  if (s) { go(s.dataset.v); return; }
+});
+document.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const t = e.target.closest('.app');
+  if (t) { const a = flat[+t.dataset.i]; if (a) mdMenu(a.id, a.name); return; }
+  const f = e.target.closest('.fold');
+  if (f) mdGroupMenu(f.dataset.folder);
+});
+// open (or close) a folder's drawer under its row
+function toggleFolder(name) {
+  openFolder = name && openFolder !== name ? name : null;
+  const top = $('scroll').scrollTop;
+  render();
+  $('scroll').scrollTop = top;
+  const d = document.querySelector('.drawer');
+  if (d) { const r = d.getBoundingClientRect(), s = $('scroll').getBoundingClientRect(); if (r.bottom > s.bottom) $('scroll').scrollTop += r.bottom - s.bottom + 8; }
+}
+window.mdStartRename = name => { if (view !== 'home' && view !== 'all') go('home'); openFolder = null; toggleFolder(name); const fn = $('fname'); if (fn) { fn.focus(); fn.select(); } };
+function cols() { const g = document.querySelector('#content .grid'); return g ? getComputedStyle(g).gridTemplateColumns.split(' ').length : (ENV.cols || 6); }
+document.addEventListener('keydown', e => {
+  if (e.target.id === 'fname') return; // renaming
+  if (PW.open) {
+    e.preventDefault();
+    const its = powerItems();
+    if (e.key === 'Escape') { if (PW.confirm) { PW.confirm = null; PW.k = -1; drawPower(); } else openPower(false); return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { PW.k = (PW.k + (e.key === 'ArrowDown' ? 1 : its.length - 1) + (PW.k < 0 && e.key === 'ArrowUp' ? 1 : 0)) % its.length; drawPower(); return; }
+    if (e.key === 'Enter' && PW.k >= 0) { its[PW.k].click(); return; }
+    return;
+  }
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    if (searching()) { qEl().value = ''; onSearch(); return; }
+    if (openFolder) { toggleFolder(null); return; }
+    if (view.startsWith('folder:')) { go('home'); return; }
+    mdHide(); return;
+  }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (searching()) { runItem(items[sel >= 0 ? sel : 0], e.altKey); return; }
+    launch(flat[sel >= 0 ? sel : 0]); return;
+  }
+  if (searching() && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && document.activeElement !== qEl()))) {
+    // through the results: across the app icons, then down the list
+    e.preventDefault();
+    const nApps = flat.length, c = cols();
+    let i = sel < 0 ? 0 : sel;
+    if (e.key === 'ArrowRight') i++;
+    else if (e.key === 'ArrowLeft') i--;
+    else if (e.key === 'ArrowDown') i = i < nApps ? (i + c < nApps ? i + c : nApps) : i + 1;
+    else i = i <= nApps ? (i - c >= 0 ? i - c : 0) : (i - 1 === nApps && nApps ? Math.floor((nApps - 1) / c) * c : i - 1);
+    sel = Math.max(0, Math.min(items.length - 1, i));
+    document.querySelectorAll('.app.sel, .app.hit, .row.sel').forEach(el => el.classList.remove('sel', 'hit'));
+    const el = sel < nApps ? document.querySelector(`.app[data-i="${sel}"]`) : document.querySelector(`.row[data-r="${sel}"]`);
+    if (el) { el.classList.add('sel'); el.scrollIntoView({ block: 'nearest' }); }
+    return;
+  }
+  const move = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: cols(), ArrowUp: -cols() }[e.key];
+  if (move !== undefined && flat.length && (document.activeElement !== qEl() || e.key === 'ArrowDown' || e.key === 'ArrowUp' || searching())) {
+    e.preventDefault();
+    sel = Math.max(0, Math.min(flat.length - 1, sel < 0 ? 0 : sel + move));
+    document.querySelectorAll('.app.sel').forEach(el => el.classList.remove('sel'));
+    const el = document.querySelector(`.app[data-i="${sel}"]`);
+    if (el) { el.classList.add('sel'); el.scrollIntoView({ block: 'nearest' }); }
+    return;
+  }
+  if (e.key.length === 1 && !e.ctrlKey && !e.altKey && e.key !== ' ' && document.activeElement !== qEl()) {
+    e.preventDefault();
+    const q = qEl(); q.focus(); q.value += e.key; onSearch();
+  }
+});
+
+// ---------- called by the dock ----------
+window.mdShown = async () => {
+  openFolder = null;
+  html.classList.remove('shown');
+  await loadEnv();
+  if (qEl()) qEl().value = '';
+  SR = { q: '', rows: [] };
+  sel = -1; view = 'home';
+  await reload();
+  $('scroll').scrollTop = 0;
+  ready();
+};
+window.mdReveal = () => { requestAnimationFrame(() => html.classList.add('shown')); if (qEl()) qEl().focus(); };
+window.mdHidden = () => { html.classList.remove('shown'); $('tip').classList.remove('on'); if (PW.open) openPower(false); if (drag) { drag.el.classList.remove('dragging'); drag = null; press = null; $('ghost').style.display = 'none'; } };
+window.mdReload = () => reload(); // Favourites or folders changed
+window.mdFavAdded = () => { view = 'home'; openFolder = null; if (qEl()) qEl().value = ''; sel = -1; reload(); toast('Added to Favourites'); $('scroll').scrollTop = 0; };
+window.mdRefresh = async () => { ICONS = {}; await loadEnv(); await reload(); };
+window.mdEnvRefresh = async () => { await loadEnv(); render(); };
+
+buildSideShell();
+init();
+</script>
+</body></html>

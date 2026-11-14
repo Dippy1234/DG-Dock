@@ -16,6 +16,7 @@ var (
 	ole32    = windows.NewLazySystemDLL("ole32.dll")
 	kernel32 = windows.NewLazySystemDLL("kernel32.dll")
 	dwmapi   = windows.NewLazySystemDLL("dwmapi.dll")
+	dcomp    = windows.NewLazySystemDLL("dcomp.dll")
 	version  = windows.NewLazySystemDLL("version.dll")
 
 	pRegisterClassExW              = user32.NewProc("RegisterClassExW")
@@ -67,6 +68,7 @@ var (
 	pLoadCursorW                   = user32.NewProc("LoadCursorW")
 	pMessageBoxW                   = user32.NewProc("MessageBoxW")
 	pGetAncestor                   = user32.NewProc("GetAncestor")
+	pRegisterShellHookWindow       = user32.NewProc("RegisterShellHookWindow")
 	pScreenToClient                = user32.NewProc("ScreenToClient")
 
 	pCreateCompatibleDC = gdi32.NewProc("CreateCompatibleDC")
@@ -105,8 +107,10 @@ var (
 	pCreateMutexW               = kernel32.NewProc("CreateMutexW")
 	pGetModuleHandleW           = kernel32.NewProc("GetModuleHandleW")
 
-	pDwmGetWindowAttribute = dwmapi.NewProc("DwmGetWindowAttribute")
-	pDwmSetWindowAttribute = dwmapi.NewProc("DwmSetWindowAttribute")
+	pDwmGetWindowAttribute              = dwmapi.NewProc("DwmGetWindowAttribute")
+	pDwmSetWindowAttribute              = dwmapi.NewProc("DwmSetWindowAttribute")
+	pDCompositionWaitForCompositorClock = dcomp.NewProc("DCompositionWaitForCompositorClock")
+	pDCompositionBoostCompositorClock   = dcomp.NewProc("DCompositionBoostCompositorClock")
 
 	pGetFileVersionInfoSizeW = version.NewProc("GetFileVersionInfoSizeW")
 	pGetFileVersionInfoW     = version.NewProc("GetFileVersionInfoW")

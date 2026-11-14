@@ -1,10 +1,8 @@
 # DG-Dock
 
-**A fast dock for Windows 11.** Your apps, folders, search, music and system tray in one place at the bottom of the screen — so you never need the taskbar.
+**A fast, good-looking dock for Windows 11.** Your apps, folders, search, music and system tray in one place at the bottom of the screen — so you never need the taskbar.
 
-https://github.com/user-attachments/assets/7439d04d-214e-4c8b-90d3-0eb70fcfe6f7
-
-**Free to download and use.** If you enjoy it, please consider [sponsoring development](https://github.com/sponsors/Dippy1234) ♥
+**Free to download and use.** If you enjoy it, please consider [supporting development](#support-dg-dock) ♥
 
 ---
 
@@ -20,9 +18,9 @@ https://github.com/user-attachments/assets/7439d04d-214e-4c8b-90d3-0eb70fcfe6f7
 - **Search** (Start button or <kbd>Alt</kbd>+<kbd>Space</kbd>) — apps, settings, files, quick sums and the web
 - **Widgets** — clock, battery ring with Wi-Fi and scroll-for-brightness, now-playing with live sound wave and scroll-for-volume
 - **System tray icons** and **Show desktop** at the end of the dock
-- **Your own icons** — change any icon, or import an Android icon pack (.apk)
+- **Your own icons** — change any icon, or import an Android icon pack (.apk); resize custom Now Playing and System tray artwork
 - **Auto-hide, smart hide, keep space for the dock, hide the Windows taskbar**
-- **Bottom, left or right**, on your main display or the one your mouse is on
+- **Bottom, left or right**, on your main display or the display under your mouse pointer
 - **Adjustable animation speed** and a Windows 11-style settings panel
 
 📖 The full **[How to Use Guide (PDF)](docs/DG-Dock%20How%20to%20Use%20Guide.pdf)** explains every feature with pictures.
@@ -41,9 +39,7 @@ Installs just for your account — no administrator password needed. Requires Wi
 
 DG-Dock is made by one person in their spare time and is free for everyone. If it's useful to you, a donation helps keep it going:
 
-- ♥ **[Sponsor DG-Dock on GitHub](https://github.com/sponsors/Dippy1234)** — or use the **♥ Sponsor** button at the top of this page.
-
-Inside the app, the **♥** button in Settings (and Settings › About) takes you there too.
+- ♥ **Donate:** _(add your GitHub Sponsors / Ko-fi / Buy Me a Coffee link here)_
 
 Donations are voluntary gifts and don't change the licence.
 
@@ -66,23 +62,18 @@ Windows is a trademark of Microsoft Corporation. DG-Dock is not affiliated with 
 
 ## Building from source (for your own use)
 
-The program's code is in the `src` folder. Requirements: Go 1.24 or later. Dependencies are included in `src/vendor`.
+Requirements: Go 1.24 or later. Dependencies are included in `src/vendor/`. The icon, manifest and version details come from `src/rsrc_windows_amd64.syso` (regenerate it from `versioninfo.json` with [goversioninfo](https://github.com/josephspurrier/goversioninfo) if you change them).
+
+The code is in the `src` folder:
 
 ```
 cd src
 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-H windowsgui" -o DG-Dock.exe .
 ```
 
-The icon, manifest and version details come from `src/rsrc_windows_amd64.syso` (regenerate it from `src/versioninfo.json` with [goversioninfo](https://github.com/josephspurrier/goversioninfo) if you change them). Add `-tags dev` for a test build that offers to update itself from newer builds placed in your Downloads folder.
-
-## Project layout
-
-| Folder | What's in it |
-|---|---|
-| `src/` | The program: Go code, the Search / Settings / Setup pages, and its dependencies |
-| `docs/` | The How to Use Guide (PDF) |
-| `assets/` | The app icon |
+Add `-tags dev` for a test build that offers to update itself from newer builds placed in your Downloads folder.
 
 ## Reporting a problem
 
 Open an [issue](../../issues) with what happened, what you expected, and your Windows version. Screenshots help a lot.
+

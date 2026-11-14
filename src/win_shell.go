@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -314,8 +315,9 @@ type WinInfo struct {
 }
 
 type procInfo struct {
-	exe   string
-	aumid string
+	exe     string
+	aumid   string
+	retryAt time.Time // retry transient failures without reopening the process every scan
 }
 
 var (
@@ -339,8 +341,11 @@ var skipExes = map[string]bool{
 }
 
 func processInfo(pid uint32) procInfo {
+	now := time.Now()
 	if pi, ok := procCache[pid]; ok {
-		return pi
+		if pi.exe != "" || pi.aumid != "" || now.Before(pi.retryAt) {
+			return pi
+		}
 	}
 	pi := procInfo{}
 	h, _, _ := pOpenProcess.Call(0x1000, 0, uintptr(pid))
@@ -358,6 +363,9 @@ func processInfo(pid uint32) procInfo {
 			}
 		}
 		pCloseHandle.Call(h)
+	}
+	if pi.exe == "" && pi.aumid == "" {
+		pi.retryAt = now.Add(2 * time.Second)
 	}
 	procCache[pid] = pi
 	return pi
@@ -452,12 +460,41 @@ func activateWindow(h uintptr) {
 
 // ---------- launching ----------
 
+type shellExecuteInfo struct {
+	cbSize       uint32
+	fMask        uint32
+	hwnd         uintptr
+	lpVerb       *uint16
+	lpFile       *uint16
+	lpParameters *uint16
+	lpDirectory  *uint16
+	nShow        int32
+	hInstApp     uintptr
+	lpIDList     uintptr
+	lpClass      *uint16
+	hkeyClass    uintptr
+	dwHotKey     uint32
+	hMonitor     uintptr
+	hProcess     uintptr
+}
+
+var pShellExecuteExW = shell32.NewProc("ShellExecuteExW")
+
+// shellOpen opens a file, folder or app. It tells Windows which display the dock is
+// on, so apps and folders open there instead of on the main display (apps that
+// remember where they were last time still go back there).
 func shellOpen(file, args string) {
-	var a uintptr
+	placeNextWindows() // and move the new window there if Windows doesn't
+	sei := shellExecuteInfo{lpVerb: u16("open"), lpFile: u16(file), nShow: SW_SHOWNORMAL}
+	sei.cbSize = uint32(unsafe.Sizeof(sei))
 	if args != "" {
-		a = up(u16(args))
+		sei.lpParameters = u16(args)
 	}
-	pShellExecuteW.Call(0, up(u16("open")), up(u16(file)), a, 0, SW_SHOWNORMAL)
+	if placeTarget != 0 {
+		sei.hMonitor = placeTarget
+		sei.fMask = 0x00200000 // SEE_MASK_HMONITOR
+	}
+	pShellExecuteExW.Call(uintptr(unsafe.Pointer(&sei))) // Windows shows its own message if it fails
 }
 
 func launchItem(it *Item) {
@@ -465,6 +502,7 @@ func launchItem(it *Item) {
 	case KindApp:
 		shellOpen("explorer.exe", `shell:AppsFolder\`+it.Target)
 	case KindStart:
+		shellKeysHere()
 		pKeybdEvent.Call(0x5B, 0, 0, 0)
 		pKeybdEvent.Call(0x5B, 0, 2, 0)
 	case KindTrash:

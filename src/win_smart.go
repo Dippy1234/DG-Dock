@@ -28,7 +28,8 @@ func (a *App) dockScreenRect() RECT {
 	if y0 > y1 {
 		y0, y1 = y1, y0
 	}
-	return RECT{a.winX + int32(x0), a.winY + int32(y0), a.winX + int32(x1), a.winY + int32(y1)}
+	ox, oy := a.winX, a.winY
+	return RECT{ox + int32(x0), oy + int32(y0), ox + int32(x1), oy + int32(y1)}
 }
 
 // windowOverDock reports whether any normal window overlaps the dock (checked at most
@@ -54,7 +55,7 @@ func (a *App) windowOverDock() bool {
 		}
 		var pid uint32
 		pGetWindowThreadProcessId.Call(h, uintptr(unsafe.Pointer(&pid)))
-		if pid == ownPID {
+		if pid == ownPID && h != a.swHwnd { // our own Settings window is a normal window: it counts
 			continue
 		}
 		ex, _, _ := pGetWindowLongPtrW.Call(h, GWL_EXSTYLE)

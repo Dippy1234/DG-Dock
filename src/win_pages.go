@@ -176,7 +176,8 @@ func (a *App) pageWheel(delta int) bool {
 		return false
 	}
 	cx, cy := getCursorPos()
-	u, v := d.toUV(float64(cx-a.winX), float64(cy-a.winY))
+	lx, ly := a.localPoint(cx, cy)
+	u, v := d.toUV(lx, ly)
 	gs := d.pillGroups()
 	if len(gs) == 0 || u < gs[0][0] || u > gs[0][1] || v < 0 || v > d.PlateV1+4*d.Scale {
 		return false
@@ -203,18 +204,23 @@ func (a *App) pageWheel(delta int) bool {
 // Windows (including the accent colour if "Show accent colour on Start and
 // taskbar" is on), or plain light/dark when the theme is forced.
 func (a *App) dockPalette(dark bool) Palette {
+	if c, ok := a.dockColour(); ok {
+		// the dock's own colour: marks and text pick light or dark to read on it
+		return Palette{Fill: c, Alpha: 0.98, Light: wantsDarkText(c)}
+	}
 	const pers = `Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`
 	if a.cfg.Theme != "dark" && a.cfg.Theme != "light" && dark {
 		if v, ok := readDWORD(pers, "ColorPrevalence"); ok && v == 1 {
 			if c, ok := readDWORD(`Software\Microsoft\Windows\CurrentVersion\Explorer\Accent`, "StartColorMenu"); ok {
 				r, g, b := uint8(c), uint8(c>>8), uint8(c>>16)
-				lum := (0.2126*float64(r) + 0.7152*float64(g) + 0.0722*float64(b)) / 255
-				return Palette{Fill: [3]uint8{r, g, b}, Alpha: 0.96, Light: lum > 0.62}
+				// Keep the Windows accent as a subtle tint, but use a darker dock
+				// surface so icons remain the focus on vivid desktop colours.
+				return Palette{Fill: [3]uint8{uint8(float64(r) * 0.38), uint8(float64(g) * 0.38), uint8(float64(b) * 0.38)}, Alpha: 0.98, Light: false}
 			}
 		}
 	}
 	if dark {
-		return Palette{Fill: [3]uint8{32, 32, 34}, Alpha: 0.95}
+		return Palette{Fill: [3]uint8{20, 20, 22}, Alpha: 0.98}
 	}
 	return Palette{Fill: [3]uint8{243, 243, 245}, Alpha: 0.94, Light: true}
 }

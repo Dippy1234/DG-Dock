@@ -33,10 +33,17 @@ type panelEnv struct {
 	Accent   string `json:"accent"`
 	OnAccent string `json:"onAccent"`
 	Acrylic  bool   `json:"acrylic"`
+	Windowed bool   `json:"windowed"`
 }
 
 // accentColors returns the Windows 11 accent shade used by Quick Settings and the text colour on it.
+// accentOverride is the accent picked in Settings › Colours ("" = the Windows accent).
+var accentOverride string
+
 func accentColors(dark bool) (string, string) {
+	if c, ok := parseHex(accentOverride); ok {
+		return hexOf(c), onColor(c)
+	}
 	k, err := registry.OpenKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Explorer\Accent`, registry.QUERY_VALUE)
 	if err == nil {
 		defer k.Close()
@@ -73,14 +80,17 @@ func (a *App) panelVisible() bool {
 }
 
 func (a *App) refreshSettings() {
-	if a.settings != nil && a.panelVisible() {
-		a.settings.eval("window.mdRefresh && window.mdRefresh()")
+	for _, h := range a.settingsHosts() {
+		h.eval("window.mdRefresh && window.mdRefresh()")
 	}
 }
 
 func (a *App) applySettingsTheme() {
 	if a.panelHwnd != 0 {
-		dwmInt(a.panelHwnd, 20, boolI(a.dock.Dark))
+		dwmInt(a.panelHwnd, 20, boolI(a.uiDark()))
+	}
+	if a.swHwnd != 0 {
+		dwmInt(a.swHwnd, 20, boolI(a.uiDark()))
 	}
 	a.refreshSettings()
 }
@@ -124,43 +134,75 @@ type panelGeom struct {
 func (a *App) panelGeometry() panelGeom {
 	d := a.dock
 	s := d.Scale
+	if a.panelExt { // opened from an extra dock: use that display's scale
+		pt := uintptr(uint32(a.panelAnchor[0])) | uintptr(uint32(a.panelAnchor[1]))<<32
+		m, _, _ := pMonitorFromPoint.Call(pt, 2)
+		if k := monitorDPI(m); k > 0 {
+			s = k
+		}
+	}
 	sc := func(v float64) int32 { return int32(math.Round(v * s)) }
 	h := a.panelH
 	if h <= 0 {
 		h = 330
 	}
-	g := panelGeom{w: sc(panelWidth), h: sc(float64(h))}
+	w := a.panelW
+	if w <= 0 {
+		w = panelWidth
+	}
+	g := panelGeom{w: sc(float64(w)), h: sc(float64(h))}
 	gap, slide := 12*s, sc(30)
 	ax, ay := a.panelAnchor[0], a.panelAnchor[1]
-	mu, _ := d.toUV(float64(ax-a.winX), float64(ay-a.winY))
-	top := d.PlateV1
-	if d.HideOffset > 0 {
-		top = d.PlateH + d.M // place it as if the dock were shown
+	clamp := a.mon
+	px, py := a.panelEdgePoint(ax, ay, gap)
+	if a.panelExt {
+		px, py = a.panelExtEdge[0], a.panelExtEdge[1]
+		var mi MONITORINFO
+		mi.CbSize = uint32(unsafe.Sizeof(mi))
+		pt := uintptr(uint32(ax)) | uintptr(uint32(ay))<<32
+		m, _, _ := pMonitorFromPoint.Call(pt, 2)
+		if r, _, _ := pGetMonitorInfoW.Call(m, uintptr(unsafe.Pointer(&mi))); r != 0 {
+			clamp = mi.RcMonitor
+		}
 	}
-	fx, fy := d.toXY(mu, top+gap)
-	px, py := a.winX+int32(fx), a.winY+int32(fy)
 	switch d.Orient {
 	case OrientLeft:
 		g.x, g.y, g.dx = px, ay-g.h/2, -slide
 	case OrientRight:
 		g.x, g.y, g.dx = px-g.w, ay-g.h/2, slide
+	case OrientTop:
+		g.x, g.y, g.dy = ax-g.w/2, py, -slide
 	default:
 		g.x, g.y, g.dy = ax-g.w/2, py-g.h, slide
 	}
 	m := sc(8)
-	if g.x < a.mon.Left+m {
-		g.x = a.mon.Left + m
+	if g.x < clamp.Left+m {
+		g.x = clamp.Left + m
 	}
-	if g.x+g.w > a.mon.Right-m {
-		g.x = a.mon.Right - m - g.w
+	if g.x+g.w > clamp.Right-m {
+		g.x = clamp.Right - m - g.w
 	}
-	if g.y < a.mon.Top+m {
-		g.y = a.mon.Top + m
+	if g.y < clamp.Top+m {
+		g.y = clamp.Top + m
 	}
-	if g.y+g.h > a.mon.Bottom-m {
-		g.y = a.mon.Bottom - m - g.h
+	if g.y+g.h > clamp.Bottom-m {
+		g.y = clamp.Bottom - m - g.h
 	}
 	return g
+}
+
+// panelEdgePoint is where the Settings panel's near edge sits for a click at (ax, ay):
+// just past this dock's surface, in screen coordinates.
+func (a *App) panelEdgePoint(ax, ay int32, gap float64) (int32, int32) {
+	d := a.dock
+	ox, oy := a.winX, a.winY
+	mu, _ := d.toUV(float64(ax-ox), float64(ay-oy))
+	top := d.PlateV1
+	if d.HideOffset > 0 {
+		top = d.PlateH + d.M // place it as if the dock were shown
+	}
+	fx, fy := d.toXY(mu, top+gap)
+	return ox + int32(fx), oy + int32(fy)
 }
 
 func (a *App) animatePanel(from, to RECT, dur time.Duration, ease func(float64) float64) {
@@ -177,6 +219,7 @@ func (a *App) animatePanel(from, to RECT, dur time.Duration, ease func(float64) 
 		l, tp := lerp(from.Left, to.Left, e), lerp(from.Top, to.Top, e)
 		r, b := lerp(from.Right, to.Right, e), lerp(from.Bottom, to.Bottom, e)
 		pSetWindowPos.Call(a.panelHwnd, 0, uintptr(l), uintptr(tp), uintptr(r-l), uintptr(b-tp), 0x0010|0x0200|0x0004)
+		a.roundPanel()
 		if t >= 1 {
 			return
 		}
@@ -226,8 +269,8 @@ func (a *App) ensurePanelHost() bool {
 	hst.onClose = func() { a.hidePanel(true) }
 	a.bindSettings(hst)
 	hst.bind("mdEnv", func() panelEnv {
-		acc, on := accentColors(a.dock.Dark)
-		return panelEnv{Dark: a.dock.Dark, Accent: acc, OnAccent: on, Acrylic: a.panelAcrylic}
+		acc, on := accentColors(a.uiDark())
+		return panelEnv{Dark: a.uiDark(), Accent: acc, OnAccent: on, Acrylic: a.panelAcrylic}
 	})
 	hst.bind("mdPanelSize", func(h int) bool {
 		if h > 100 && h < 1400 && h != a.panelH {
@@ -238,13 +281,42 @@ func (a *App) ensurePanelHost() bool {
 		}
 		return true
 	})
+	// Quick settings is narrow; All settings is a wider window with a side panel
+	hst.bind("mdPanelWidth", func(w int) bool {
+		if w >= 300 && w <= 1000 && w != a.panelW {
+			a.panelW = w
+			if a.panelVisible() {
+				pPostMessageW.Call(a.hwnd, wmPanelResize, 0, 0)
+			}
+		}
+		return true
+	})
 	hst.bind("mdHide", func() bool { pPostMessageW.Call(a.hwnd, wmPanelHide, 0, 0); return true })
+	// All settings opens in its own window
+	hst.bind("mdOpenWindow", func(page string) bool {
+		a.swPage = page
+		pPostMessageW.Call(a.hwnd, wmOpenSetWin, 0, 0) // not inside the WebView2 callback
+		return true
+	})
 	hst.load(settingsHTML)
 	return true
 }
 
 // openSettings shows the panel next to the dock (or hides it if it's already open).
 func (a *App) openSettings() {
+	if isSecondary() {
+		// the main dock shows Settings, but above this dock, on this display
+		cx, cy := getCursorPos()
+		px, py := a.panelEdgePoint(cx, cy, 12*a.dock.Scale)
+		forwardToMainAt(msgOpenSettings, cx, cy, px, py)
+		return
+	}
+	a.openSettingsWindow("") // the quick panel is gone (Build 236): straight to Settings
+}
+
+// openSettingsFor opens Settings at the pointer; ext means it came from an extra dock
+// on another display, with the panel's near edge at (px, py).
+func (a *App) openSettingsFor(ext bool, cx, cy, px, py int32) {
 	a.createPanelWindow()
 	if a.panelHwnd == 0 {
 		return
@@ -257,12 +329,17 @@ func (a *App) openSettings() {
 	if time.Since(a.panelHiddenAt) < 250*time.Millisecond {
 		return
 	}
-	cx, cy := getCursorPos()
+	if !ext {
+		cx, cy = getCursorPos()
+	}
 	a.panelAnchor = [2]int32{cx, cy}
-	dwmInt(a.panelHwnd, 20, boolI(a.dock.Dark))
+	a.panelExt, a.panelExtEdge = ext, [2]int32{px, py}
+	a.panelShownAt = time.Now()
+	dwmInt(a.panelHwnd, 20, boolI(a.uiDark()))
 	g := a.panelGeometry()
 	from := geomRect(g, true)
 	pSetWindowPos.Call(a.panelHwnd, ^uintptr(0), uintptr(from.Left), uintptr(from.Top), uintptr(g.w), uintptr(g.h), 0x0010)
+	a.roundPanel()
 	first := a.settings == nil
 	pShowWindow.Call(a.panelHwnd, 5)
 	pSetForegroundWindow.Call(a.panelHwnd)
@@ -283,6 +360,7 @@ func (a *App) hidePanel(animated bool) {
 	if !a.panelVisible() {
 		return
 	}
+	defer func() { a.panelW = 0 }() // it always opens as Quick settings
 	if animated {
 		var cur RECT
 		pGetWindowRect.Call(a.panelHwnd, uintptr(unsafe.Pointer(&cur)))
@@ -304,6 +382,7 @@ func (a *App) resizePanel() {
 	// snap to the new size in one step: resizing a WebView2 every frame is what makes panels stutter
 	r := geomRect(a.panelGeometry(), false)
 	pSetWindowPos.Call(a.panelHwnd, 0, uintptr(r.Left), uintptr(r.Top), uintptr(r.Right-r.Left), uintptr(r.Bottom-r.Top), 0x0010|0x0200|0x0004)
+	a.roundPanel()
 	if a.settings != nil {
 		a.settings.web.Resize()
 	}
@@ -312,10 +391,31 @@ func (a *App) resizePanel() {
 // openIconPicker opens the panel on the icon picker for pin idx.
 func (a *App) openIconPicker(idx int) {
 	a.pendingPicker = idx
-	a.openSettings()
-	if a.settings != nil {
-		a.settings.eval("window.mdCheckPending && window.mdCheckPending()")
-	}
+	a.openPendingInWindow()
 }
 
 var _ = json.Marshal
+
+// roundPanel cuts the panel to Windows 11's 8 px rounded corners itself. Windows is
+// asked for them too, but leaves them square on some PCs (some graphics drivers turn
+// rounding off), so the panel's shape is set here as well, whenever its size changes.
+func (a *App) roundPanel() {
+	if a.panelHwnd == 0 {
+		return
+	}
+	var r RECT
+	pGetWindowRect.Call(a.panelHwnd, uintptr(unsafe.Pointer(&r)))
+	w, h := r.Right-r.Left, r.Bottom-r.Top
+	dpi, _, _ := pGetDpiForWindow.Call(a.panelHwnd)
+	if dpi == 0 {
+		dpi = 96
+	}
+	if w == a.panelRgnW && h == a.panelRgnH && int32(dpi) == a.panelRgnDPI {
+		return
+	}
+	a.panelRgnW, a.panelRgnH, a.panelRgnDPI = w, h, int32(dpi)
+	d := uintptr(math.Round(16 * float64(dpi) / 96)) // the ellipse's size: twice the radius
+	if rgn, _, _ := pCreateRoundRectRgn.Call(0, 0, uintptr(w+1), uintptr(h+1), d, d); rgn != 0 {
+		pSetWindowRgn.Call(a.panelHwnd, rgn, 1) // the window owns it from here
+	}
+}

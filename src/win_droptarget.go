@@ -118,6 +118,7 @@ func ptOf(pt uintptr) (int32, int32) { return int32(uint32(pt)), int32(uint32(pt
 func dtDragEnter(this, obj, keys, pt, effect uintptr) uintptr {
 	a := app
 	a.drag = readDataObject(obj)
+	dragKeys = uint32(keys)
 	x, y := ptOf(pt)
 	e := a.dragOver(x, y, *(*uint32)(unsafe.Pointer(effect)))
 	*(*uint32)(unsafe.Pointer(effect)) = e
@@ -130,6 +131,7 @@ func dtDragEnter(this, obj, keys, pt, effect uintptr) uintptr {
 
 func dtDragOver(this, keys, pt, effect uintptr) uintptr {
 	a := app
+	dragKeys = uint32(keys)
 	x, y := ptOf(pt)
 	e := a.dragOver(x, y, *(*uint32)(unsafe.Pointer(effect)))
 	*(*uint32)(unsafe.Pointer(effect)) = e
@@ -152,6 +154,7 @@ func dtDragLeave(this uintptr) uintptr {
 
 func dtDrop(this, obj, keys, pt, effect uintptr) uintptr {
 	a := app
+	dragKeys = uint32(keys)
 	x, y := ptOf(pt)
 	e := a.dragOver(x, y, *(*uint32)(unsafe.Pointer(effect)))
 	*(*uint32)(unsafe.Pointer(effect)) = e
@@ -283,6 +286,15 @@ func (a *App) dragOver(x, y int32, allowed uint32) uint32 {
 		if target.Kind == KindTrash {
 			return pick(dropMove, dropCopy, dropLink)
 		}
+		if target.Widget == "usb" {
+			return pick(dropCopy, dropMove, dropLink)
+		}
+		if target.IsDir {
+			if folderDropMoves(target.Target, a.drag.files, dragKeys) {
+				return pick(dropMove, dropCopy)
+			}
+			return pick(dropCopy, dropMove)
+		}
 		return pick(dropCopy, dropLink, dropMove) // open with this app
 	}
 	before, section := a.dropSlot(lx, ly)
@@ -306,8 +318,11 @@ func (a *App) dropTargetItem(lx, ly float64) *Item {
 	if it.Kind == KindGap || it.Slot <= 0 || absF(u-it.U) > it.Slot*0.3 {
 		return nil
 	}
-	if it.Kind == KindTrash {
-		return it
+	if it.Kind == KindTrash || it.Widget == "usb" {
+		return it // the Bin, or a USB drive (copies onto it)
+	}
+	if it.IsDir && it.Target != "" && canDropInto(it.Target, a.drag.files) {
+		return it // a folder: files go into it
 	}
 	if it.ExePath != "" && !it.IsDir && !a.drag.dirs {
 		for _, f := range a.drag.files {
@@ -319,6 +334,42 @@ func (a *App) dropTargetItem(lx, ly float64) *Item {
 		return it
 	}
 	return nil
+}
+
+// dragKeys are the keys held during the current drag (MK_SHIFT, MK_CONTROL).
+var dragKeys uint32
+
+// canDropInto: files can go into a folder unless one of them is the folder itself or
+// a folder that contains it.
+func canDropInto(dir string, files []string) bool {
+	d := strings.ToLower(filepath.Clean(dir)) + `\`
+	for _, f := range files {
+		f = strings.ToLower(filepath.Clean(f))
+		if strings.HasPrefix(d, f+`\`) || f+`\` == d {
+			return false
+		}
+		if strings.EqualFold(filepath.Dir(f)+`\`, d) && len(files) == 1 {
+			return false // already in that folder
+		}
+	}
+	return true
+}
+
+// folderDropMoves follows File Explorer: on the same drive files move, onto another
+// drive they're copied; hold Ctrl to copy, Shift to move.
+func folderDropMoves(dir string, files []string, keys uint32) bool {
+	switch {
+	case keys&0x8 != 0: // MK_CONTROL
+		return false
+	case keys&0x4 != 0: // MK_SHIFT
+		return true
+	}
+	for _, f := range files {
+		if !strings.EqualFold(filepath.VolumeName(f), filepath.VolumeName(dir)) {
+			return false
+		}
+	}
+	return true
 }
 
 func absF(v float64) float64 {
@@ -412,25 +463,22 @@ func (a *App) placeDropGap(items []*Item, used map[string]bool) []*Item {
 			}
 		}
 	}
-	if at < 0 { // end of the pill
-		at = len(items)
+	if at < 0 { // end of the pill: after its last icon (before the Bin), wherever the pill sits
+		at = -1
 		for i, it := range items {
-			if a.dropSection == 0 && it.Kind == KindSep {
+			if it.Kind == KindSep || it.Kind == KindWidget || it.Kind == KindGap || it.InRun {
+				continue
+			}
+			if a.dropSection == 1 && it.Kind == KindTrash {
 				at = i
 				break
 			}
-			if a.dropSection == 1 && (it.Kind == KindTrash || it.Key == "sep2") {
-				at = i
-				break
+			if it.Section == a.dropSection {
+				at = i + 1
 			}
 		}
-		if a.dropSection == 1 && at == len(items) {
-			for i, it := range items {
-				if it.Kind == KindWidget {
-					at = i
-					break
-				}
-			}
+		if at < 0 {
+			at = len(items)
 		}
 	}
 	out := append([]*Item{}, items[:at]...)
@@ -445,6 +493,14 @@ func (a *App) doDrop(x, y int32) {
 	if t := a.dropTargetItem(lx, ly); t != nil {
 		if t.Kind == KindTrash {
 			recycleFiles(dg.files)
+			return
+		}
+		if t.Widget == "usb" {
+			a.copyToDrive(t.UsbRoot, dg.files)
+			return
+		}
+		if t.IsDir {
+			a.dropIntoFolder(t, dg.files, folderDropMoves(t.Target, dg.files, dragKeys))
 			return
 		}
 		for _, f := range dg.files {

@@ -39,7 +39,9 @@ const (
 	GlyphSize       = '' // FullScreen
 	GlyphPower      = ''
 	GlyphSearch     = '\uE721'
-	GlyphFile       = '' // Document
+	GlyphApps       = '\uE71D' // AllApps
+	GlyphStar       = '\uE734' // FavoriteStar
+	GlyphFile       = ''      // Document
 )
 
 type mItem struct {
@@ -97,7 +99,7 @@ type menuMetricsT struct {
 
 func menuMetrics(sc float64) menuMetricsT {
 	return menuMetricsT{
-		s: sc, rowH: math.Round(34 * sc), sepH: math.Round(9 * sc), headH: math.Round(30 * sc), padY: math.Round(4 * sc),
+		s: sc, rowH: math.Round(34 * sc), sepH: math.Round(9 * sc), headH: math.Round(30 * sc), padY: math.Round(6 * sc),
 		iconX: math.Round(16 * sc), textX: math.Round(44 * sc), padR: math.Round(18 * sc),
 		px: int(math.Round(14 * sc)), hpx: int(math.Round(12 * sc)), gpx: int(math.Round(16 * sc)),
 	}
@@ -139,6 +141,13 @@ func layoutMenuPure(te *TextEngine, sc float64, m *macMenu) (float64, float64) {
 	return math.Ceil(w), math.Ceil(y)
 }
 
+var (
+	menuTintOn bool                     // right-click menus take the dock colour (Settings › Colours)
+	menuTintC  [3]uint8                 // …which is this
+	menuAccent = [3]uint8{95, 179, 255} // the accent: icons and the highlight
+	menuAlpha  = 1.0                    // Colour strength, as Settings uses it
+)
+
 // renderMenuPure draws a Windows 11 menu. When acrylic is true the window behind
 // provides the blurred backdrop, so the fill here is only a light tint.
 func renderMenuPure(te, glyphs *TextEngine, sc float64, dark, acrylic bool, dst *image.RGBA, W, H int, menu *macMenu, hotIdx, openIdx int) {
@@ -148,12 +157,13 @@ func renderMenuPure(te, glyphs *TextEngine, sc float64, dark, acrylic bool, dst 
 	mm := menuMetrics(sc)
 	s := mm.s
 	w, h := float64(W), float64(H)
-	rad := 8 * s
+	rad := 8 * s // Windows' rounded corners (DWMWCP_ROUND) on the backing window
 
 	tintA := 0.97
 	if acrylic {
-		tintA = 0.42
+		tintA = 0.42 + 0.5*(menuAlpha-0.4)/0.6 // follows Colour strength, like Settings
 	}
+	acc := pc(menuAccent[0], menuAccent[1], menuAccent[2], 1)
 	bg := pc(44, 44, 44, tintA)
 	text, dim := pc(255, 255, 255, 1), pc(255, 255, 255, 0.55)
 	hover, line, rim := pc(255, 255, 255, 0.075), pc(255, 255, 255, 0.09), pc(255, 255, 255, 0.10)
@@ -161,6 +171,9 @@ func renderMenuPure(te, glyphs *TextEngine, sc float64, dark, acrylic bool, dst 
 		bg = pc(249, 249, 249, tintA)
 		text, dim = pc(26, 26, 26, 1), pc(0, 0, 0, 0.55)
 		hover, line, rim = pc(0, 0, 0, 0.05), pc(0, 0, 0, 0.08), pc(0, 0, 0, 0.10)
+	}
+	if menuTintOn { // Settings › Colours › menus match the dock
+		bg = pc(menuTintC[0], menuTintC[1], menuTintC[2], tintA)
 	}
 	fillRoundRect(dst, 0, 0, w, h, rad, image.NewUniform(bg))
 	if !acrylic {
@@ -172,7 +185,7 @@ func renderMenuPure(te, glyphs *TextEngine, sc float64, dark, acrylic bool, dst 
 		cy := (y0 + y1) / 2
 		switch {
 		case it.Sep:
-			fillRoundRect(dst, 0, cy-0.5*s, w, 1*s, 0, image.NewUniform(line))
+			fillRoundRect(dst, 12*s, cy-0.5*s, w-24*s, 1*s, 0, image.NewUniform(line))
 			continue
 		case it.Header:
 			te.Draw(dst, truncateLabel(te, it.Text, mm.hpx, w-mm.iconX-mm.padR), mm.hpx, mm.iconX, cy+float64(mm.hpx)*0.36, dim)
@@ -188,9 +201,16 @@ func renderMenuPure(te, glyphs *TextEngine, sc float64, dark, acrylic bool, dst 
 		if it.Disabled {
 			tc = dim
 		}
-		if (i == hotIdx || i == openIdx) && !it.Disabled {
-			fillRoundRect(dst, 4*s, y0+2*s, w-8*s, y1-y0-4*s, 4*s, image.NewUniform(hover))
+		gc := acc // icons in the accent
+		if it.Danger || it.Disabled {
+			gc = tc
 		}
+		if (i == hotIdx || i == openIdx) && !it.Disabled {
+			hl := pc(menuAccent[0], menuAccent[1], menuAccent[2], 0.18)
+			fillRoundRect(dst, 5*s, y0+2*s, w-10*s, y1-y0-4*s, 7*s, image.NewUniform(hl))
+			fillRoundRect(dst, 5*s, y0+2*s+(y1-y0-4*s)*0.25, 3*s, (y1-y0-4*s)*0.5, 1.5*s, image.NewUniform(acc))
+		}
+		_ = hover
 		// leading icon: app/file image, glyph, or check mark
 		ix := mm.iconX
 		gsz := float64(mm.gpx)
@@ -200,9 +220,9 @@ func renderMenuPure(te, glyphs *TextEngine, sc float64, dark, acrylic bool, dst 
 			r := image.Rect(int(ix-1*s), int(cy-gsz/2-1*s), int(ix+gsz+1*s), int(cy+gsz/2+1*s))
 			xdraw.BiLinear.Scale(dst, r, src, src.Bounds(), xdraw.Over, nil)
 		case it.Checked:
-			drawGlyph(glyphs, dst, GlyphCheck, mm.gpx, ix, cy, tc)
+			drawGlyph(glyphs, dst, GlyphCheck, mm.gpx, ix, cy, gc)
 		case it.Glyph != 0:
-			drawGlyph(glyphs, dst, it.Glyph, mm.gpx, ix, cy, tc)
+			drawGlyph(glyphs, dst, it.Glyph, mm.gpx, ix, cy, gc)
 		}
 		tw := w - mm.textX - mm.padR
 		if it.Sub != nil {

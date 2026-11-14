@@ -14,6 +14,10 @@
   h1 { margin:0; font:600 24px/30px "Segoe UI Variable Display","Segoe UI",sans-serif; }
   .ver { color:var(--dim); font-size:13px; }
   .lead { color:var(--dim); margin:18px 0 0; font-size:13.5px; }
+  .advice { margin-top:16px; padding:12px 14px; border-radius:7px; background:color-mix(in srgb, var(--accent) 12%, transparent);
+    border:1px solid color-mix(in srgb, var(--accent) 35%, transparent); font-size:12.5px; line-height:18px; }
+  .advice b { display:block; margin-bottom:4px; font-size:13px; }
+  .advice span { display:block; margin-top:6px; color:var(--dim); }
   .vers { display:flex; align-items:center; gap:10px; margin-top:16px; font-size:13px; }
   .pill { padding:3px 10px; border-radius:20px; background:var(--card); border:1px solid var(--card-line); }
   .pill.new { background:var(--accent); color:var(--on-accent); border-color:transparent; font-weight:600; }
@@ -74,6 +78,9 @@
 
   <div class="setup">
     <p class="lead" id="lead"></p>
+    <div class="advice" id="advice" style="display:none"><b>Please uninstall your current dock before installing version 2.0.</b>
+      Version 2.0 changes a lot (Launchpad, settings, displays), and starting clean avoids old settings causing problems.
+      <span>“Uninstall old version” removes the old DG-Dock completely — settings, icon packs and the Pictures › DG-Dock Icon folder — then you can install 2.0. To keep your settings instead, choose “Update anyway”.</span></div>
     <div class="vers" id="vers" style="display:none"><span class="pill" id="vOld"></span>
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
       <span class="pill new" id="vNew"></span></div>
@@ -116,7 +123,12 @@ function closeLicence() { $('lic').classList.remove('on'); }
 // Install stays off until the licence is accepted (updates and reinstalls show it as a note)
 function syncGo() { if (mode === 'install') $('go').disabled = !$('accept').checked; }
 
+const agreeHTML = document.getElementById('agree').innerHTML;
 function show() {
+  // start from the plain install screen (show runs again after removing an old version)
+  ['opts', 'where', 'portable', 'agree'].forEach(id => $(id).style.display = '');
+  $('vers').style.display = 'none'; $('title').textContent = 'DG-Dock'; $('agree').innerHTML = agreeHTML;
+  $('secondBtn').style.display = 'none'; $('advice').style.display = 'none';
   document.documentElement.classList.toggle('light', !I.dark);
   document.documentElement.style.setProperty('--accent', I.accent);
   document.documentElement.style.setProperty('--on-accent', I.onAccent);
@@ -126,9 +138,25 @@ function show() {
   const go = $('go'), second = $('secondBtn');
   if (!I.installed) {
     mode = 'install';
-    $('lead').textContent = 'A beautiful dock for Windows 11 — pinned apps and folders, running app dots, previews and widgets.';
+    $('lead').textContent = 'A fast dock for Windows 11 — your apps, Launchpad, folders, widgets and system tray in one place.';
     go.textContent = 'Install';
     $('accept').onchange = syncGo; syncGo();
+  } else if (I.installed < 210 && I.installed < I.version && !I.keepOld) { // older than 2.0
+    // a big new version: start clean — remove the old dock first, then install
+    mode = 'replace';
+    $('title').textContent = 'Install DG-Dock ' + (I.name || I.version);
+    $('lead').textContent = 'An older DG-Dock (build ' + I.installed + ') is on this PC.';
+    $('advice').style.display = '';
+    $('opts').style.display = 'none'; $('where').style.display = 'none'; $('portable').style.display = 'none'; $('agree').style.display = 'none';
+    go.textContent = 'Uninstall old version';
+    go.onclick = async () => {
+      go.disabled = true; go.innerHTML = '<span class="spin"></span>Removing…';
+      await mdUninstallOld();
+      I = await mdSetupInfo(); go.disabled = false; show();
+    };
+    second.style.display = ''; second.textContent = 'Update anyway';
+    second.onclick = () => { I.keepOld = true; show(); };
+    return;
   } else if (I.installed < I.version) {
     mode = 'update';
     $('title').textContent = 'Update DG-Dock';

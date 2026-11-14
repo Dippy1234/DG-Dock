@@ -7,11 +7,14 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"image"
+	_ "image/jpeg"
 	"image/png"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -25,8 +28,13 @@ type IconPack struct {
 	Name   string            `json:"name"`
 	Labels map[string]string `json:"labels"` // normalised app name -> drawable
 	Icons  []string          `json:"icons"`
-	Dir    string            `json:"-"`
-	keys   map[string]string
+	// Dynamic packs (the built-in Black and White Icons) store colour layers, not
+	// pictures: red = the lines, green = the accent. The dock paints them in the colours
+	// in use: Variant "light" or "dark" tiles, or "auto" to follow the dock's background.
+	Dynamic bool   `json:"dynamic,omitempty"`
+	Variant string `json:"variant,omitempty"`
+	Dir     string `json:"-"`
+	keys    map[string]string
 }
 
 func normName(s string) string {
@@ -55,11 +63,36 @@ func packName(apk string) string {
 }
 
 var (
-	reFilterTok = regexp.MustCompile(`<!--\s*([\s\S]*?)\s*-->|<item\s[^>]*?component="([^"]*)"[^>]*?drawable="([^"]*)"`)
-	reDrawable  = regexp.MustCompile(`^res/drawable[^/]*/([a-z0-9_]+)\.(png|webp)$`)
+	reDrawable = regexp.MustCompile(`(?i)^(?:res/(?:drawable|mipmap)(?:-[^/]*)?/|assets/(?:[^/]+/)*|res/)([^/]+)\.(png|webp|jpe?g)$`)
 )
 
+func iconResourceKey(name string) (string, bool) {
+	name = filepath.ToSlash(name)
+	if strings.HasSuffix(strings.ToLower(name), ".9.png") {
+		return "", false
+	}
+	m := reDrawable.FindStringSubmatch(name)
+	if m == nil {
+		return "", false
+	}
+	base := m[1]
+	var b strings.Builder
+	underscore := false
+	for _, r := range base {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '-' {
+			b.WriteRune(r)
+			underscore = false
+		} else if b.Len() > 0 && !underscore {
+			b.WriteByte('_')
+			underscore = true
+		}
+	}
+	key := strings.Trim(b.String(), "_")
+	return key, key != ""
+}
+
 func dpiRank(path string) int {
+	path = strings.ToLower(path)
 	switch {
 	case strings.Contains(path, "nodpi"):
 		return 6
@@ -85,55 +118,88 @@ func ImportIconPack(apk, root string) (*IconPack, error) {
 	var filter []byte
 	files := map[string]*zip.File{}
 	for _, f := range zr.File {
-		if f.Name == "assets/appfilter.xml" {
+		base := strings.ToLower(path.Base(f.Name))
+		if (base == "appfilter.xml" || base == "app_filter.xml") && len(filter) == 0 {
 			rc, err := f.Open()
 			if err == nil {
-				filter, _ = io.ReadAll(rc)
+				data, readErr := io.ReadAll(io.LimitReader(rc, 8<<20))
 				rc.Close()
+				if readErr == nil && len(data) > 0 && !bytes.HasPrefix(data, []byte{0x03, 0x00, 0x08, 0x00}) {
+					filter = data
+				}
 			}
 		}
-		if m := reDrawable.FindStringSubmatch(f.Name); m != nil {
-			if old, ok := files[m[1]]; !ok || dpiRank(f.Name) > dpiRank(old.Name) {
-				files[m[1]] = f
+		if key, ok := iconResourceKey(f.Name); ok {
+			if old, exists := files[key]; !exists || dpiRank(f.Name) > dpiRank(old.Name) {
+				files[key] = f
 			}
 		}
-	}
-	if len(filter) == 0 {
-		return nil, errors.New("this APK doesn't look like an icon pack (no appfilter.xml)")
 	}
 	pack := &IconPack{Name: packName(apk), Labels: map[string]string{}}
-	label := ""
 	wanted := map[string]bool{}
-	for _, t := range reFilterTok.FindAllSubmatch(filter, -1) {
-		if t[1] != nil {
-			label = string(t[1])
-			continue
-		}
-		d := string(t[3])
-		if _, ok := files[d]; !ok {
-			continue
-		}
-		wanted[d] = true
-		if k := normName(label); k != "" && len(label) < 60 {
-			if _, exists := pack.Labels[k]; !exists {
-				pack.Labels[k] = d
+	if len(filter) > 0 {
+		dec := xml.NewDecoder(bytes.NewReader(filter))
+		label := ""
+		for {
+			tok, err := dec.Token()
+			if err != nil {
+				break
 			}
+			switch t := tok.(type) {
+			case xml.Comment:
+				label = strings.TrimSpace(string(t))
+			case xml.StartElement:
+				if !strings.EqualFold(t.Name.Local, "item") {
+					continue
+				}
+				d := ""
+				for _, attr := range t.Attr {
+					if strings.EqualFold(attr.Name.Local, "drawable") {
+						d = attr.Value
+						break
+					}
+				}
+				if _, ok := files[d]; !ok {
+					continue
+				}
+				wanted[d] = true
+				if k := normName(label); k != "" && len(label) < 60 {
+					if _, exists := pack.Labels[k]; !exists {
+						pack.Labels[k] = d
+					}
+				}
+				label = ""
+			}
+		}
+	}
+	// Some packs omit appfilter.xml. Import their named image resources as a
+	// manual icon set so users can still choose icons in the pack picker.
+	if len(wanted) == 0 {
+		for d := range files {
+			wanted[d] = true
 		}
 	}
 	if len(wanted) == 0 {
-		return nil, errors.New("no icons found in this icon pack")
+		return nil, errors.New("no PNG, WebP, or JPEG icon images were found in this APK")
 	}
-	// offer every full-size drawable in the picker too, not just the mapped ones
+	// Include full-size drawable resources in the picker, not just mapped icons.
 	for d, f := range files {
-		if strings.Contains(f.Name, "nodpi") {
+		if strings.Contains(strings.ToLower(f.Name), "nodpi") {
 			wanted[d] = true
 		}
 	}
 	dir := filepath.Join(root, pack.Name)
-	os.RemoveAll(dir)
-	if err := os.MkdirAll(filepath.Join(dir, "icons"), 0755); err != nil {
+	tmpDir := dir + ".importing"
+	os.RemoveAll(tmpDir)
+	if err := os.MkdirAll(filepath.Join(tmpDir, "icons"), 0755); err != nil {
 		return nil, err
 	}
+	completed := false
+	defer func() {
+		if !completed {
+			os.RemoveAll(tmpDir)
+		}
+	}()
 	for d := range wanted {
 		f := files[d]
 		rc, err := f.Open()
@@ -145,7 +211,7 @@ func ImportIconPack(apk, root string) (*IconPack, error) {
 		if err != nil {
 			continue
 		}
-		if strings.HasSuffix(f.Name, ".webp") {
+		if strings.ToLower(path.Ext(f.Name)) != ".png" {
 			img, _, err := image.Decode(bytes.NewReader(data))
 			if err != nil {
 				continue
@@ -156,15 +222,23 @@ func ImportIconPack(apk, root string) (*IconPack, error) {
 			}
 			data = buf.Bytes()
 		}
-		if os.WriteFile(filepath.Join(dir, "icons", d+".png"), data, 0644) == nil {
+		if os.WriteFile(filepath.Join(tmpDir, "icons", d+".png"), data, 0644) == nil {
 			pack.Icons = append(pack.Icons, d)
 		}
 	}
+	if len(pack.Icons) == 0 {
+		return nil, errors.New("the APK contains no readable PNG or WebP icons")
+	}
 	sort.Strings(pack.Icons)
 	b, _ := json.Marshal(pack)
-	if err := os.WriteFile(filepath.Join(dir, "pack.json"), b, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "pack.json"), b, 0644); err != nil {
 		return nil, err
 	}
+	os.RemoveAll(dir)
+	if err := os.Rename(tmpDir, dir); err != nil {
+		return nil, err
+	}
+	completed = true
 	pack.Dir = dir
 	pack.index()
 	return pack, nil
@@ -268,15 +342,15 @@ func (p *IconPack) Match(name string) string {
 	if n == "" {
 		return ""
 	}
+	if d, ok := p.keys[n]; ok { // the pack's own name for it wins (e.g. Command Prompt over Terminal)
+		return d
+	}
 	if al, ok := packAliases[n]; ok {
 		for _, d := range al {
 			if p.has(d) {
 				return d
 			}
 		}
-	}
-	if d, ok := p.keys[n]; ok {
-		return d
 	}
 	// "Spotify Premium", "Steam Client Bootstrapper": try the first word(s)
 	words := strings.Fields(strings.ToLower(name))
@@ -308,4 +382,34 @@ func (p *IconPack) Search(q string, limit int) []string {
 		}
 	}
 	return out
+}
+
+// composeLayerIcon paints a dynamic pack's icon: the tile in bg, the lines (the mask's
+// red channel) in ink, then the accent (its green channel) in acc.
+func composeLayerIcon(mask image.Image, bg, ink, acc [3]uint8) *image.RGBA {
+	b := mask.Bounds()
+	out := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	mix := func(x, y uint8, t uint32) uint8 { return uint8((uint32(x)*(255-t) + uint32(y)*t + 127) / 255) }
+	i := 0
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			r, g, _, _ := mask.At(x, y).RGBA()
+			ri, gi := r>>8, g>>8
+			var c [3]uint8
+			for k := 0; k < 3; k++ {
+				c[k] = mix(mix(bg[k], ink[k], ri), acc[k], gi)
+			}
+			out.Pix[i], out.Pix[i+1], out.Pix[i+2], out.Pix[i+3] = c[0], c[1], c[2], 255
+			i += 4
+		}
+	}
+	return out
+}
+
+// layerColours is a dynamic pack's tile and line colours: dark tiles when dark.
+func layerColours(dark bool) (bg, ink [3]uint8) {
+	if dark {
+		return [3]uint8{0x15, 0x15, 0x15}, [3]uint8{0xf2, 0xf2, 0xf2}
+	}
+	return [3]uint8{0xf4, 0xf4, 0xf4}, [3]uint8{0x14, 0x14, 0x14}
 }

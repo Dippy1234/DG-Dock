@@ -14,12 +14,14 @@ package main
 import (
 	"bytes"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -33,7 +35,7 @@ import (
 // appVersion is bumped for every build handed out. versionMarker sits in the exe as
 // plain text so another copy can read a file's version without running it.
 const (
-	versionMarker = "DGDockBuildVersion=57;"
+	versionMarker = "DGDockBuildVersion=260;"
 	uninstallKey  = `Software\Microsoft\Windows\CurrentVersion\Uninstall\DG-Dock`
 	installedName = "DG-Dock.exe"
 
@@ -76,7 +78,7 @@ func fixOldPaths(dir, old string) {
 	esc := func(s string) string { return strings.ReplaceAll(s, `\`, `\\`) } // as written in JSON
 	nb := bytes.ReplaceAll(b, []byte(esc(old)), []byte(esc(dir)))
 	if !bytes.Equal(nb, b) {
-		os.WriteFile(p, nb, 0o644)
+		writeFileAtomic(p, nb)
 	}
 }
 
@@ -102,13 +104,13 @@ var licenceText string
 
 // Links shown in Settings › About. Leave a link empty to hide its button.
 const (
-	homeURL   = "" // the official GitHub page, e.g. https://github.com/<you>/DG-Dock
-	donateURL = "" // e.g. https://github.com/sponsors/<you> or https://ko-fi.com/<you>
+	homeURL   = "https://github.com/Dippy1234/DG-Dock"
+	donateURL = "https://github.com/sponsors/Dippy1234"
 )
 
 // releaseVersion is the version people see; appVersion (the build number) is what
 // installs and updates compare.
-const releaseVersion = "1.0.0"
+const releaseVersion = "2.0.0"
 
 func installDir() string {
 	local, _ := os.UserCacheDir() // %LOCALAPPDATA%
@@ -231,7 +233,7 @@ func stopRunningDocks() {
 				break
 			}
 			pPostMessageW.Call(hw, WM_CLOSE, 0, 0)
-			for t := 0; t < 20; t++ {
+			for t := 0; t < 50; t++ { // up to 5 s to give the taskbar back and save
 				time.Sleep(100 * time.Millisecond)
 				if h2, _, _ := pFindWindowW.Call(up(u16(class)), 0); h2 != hw {
 					break
@@ -277,18 +279,86 @@ func copyExe(src, dst string) error {
 		os.Remove(tmp)
 		return err
 	}
-	out.Close()
+	if err := out.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	old := dst + ".old"
 	var lastErr error
 	for i := 0; i < 30; i++ { // the old exe can stay locked for a moment after it exits
-		os.Remove(dst + ".old")
-		os.Rename(dst, dst+".old")
+		os.Remove(old)
+		movedOld := false
+		if _, err := os.Stat(dst); err == nil {
+			movedOld = os.Rename(dst, old) == nil
+		}
 		if lastErr = os.Rename(tmp, dst); lastErr == nil {
-			os.Remove(dst + ".old")
+			os.Remove(old) // may still be in use; the dock tidies it up when it next starts
 			return nil
+		}
+		if movedOld {
+			// put the working copy back, so a failed update never leaves no DG-Dock.exe
+			os.Rename(old, dst)
 		}
 		time.Sleep(150 * time.Millisecond)
 	}
+	os.Remove(tmp)
 	return lastErr
+}
+
+// tidyInstallLeftovers removes the files an update leaves when the old exe was still
+// in use at the time.
+func tidyInstallLeftovers() {
+	if !isInstalledCopy() {
+		return
+	}
+	exe := installedPath()
+	os.Remove(exe + ".old")
+	os.Remove(exe + ".new")
+}
+
+// restoreTaskbarAfterDock gives the Windows taskbar back without the dock's help, for
+// when the dock was force-closed or had crashed while hiding it (used by uninstall).
+func restoreTaskbarAfterDock() {
+	for _, h := range trayWindows() {
+		pShowWindow.Call(h, SW_SHOWNA)
+	}
+	p := filepath.Join(dataDir(), "settings.json")
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return
+	}
+	var cfg map[string]json.RawMessage
+	if json.Unmarshal(b, &cfg) != nil {
+		return
+	}
+	mm := -1
+	if raw, ok := cfg["prevMMTaskbar"]; ok {
+		json.Unmarshal(raw, &mm)
+	}
+	if mm >= 0 { // the dock had turned on taskbars on all displays: put that back too
+		const adv = `Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced`
+		if k, err := registry.OpenKey(registry.CURRENT_USER, adv, registry.SET_VALUE); err == nil {
+			k.SetDWordValue("MMTaskbarEnabled", uint32(mm))
+			k.Close()
+			broadcastTraySettings()
+		}
+		cfg["prevMMTaskbar"] = json.RawMessage("-1")
+		if nb, err := json.MarshalIndent(cfg, "", "  "); err == nil {
+			writeFileAtomic(p, nb)
+		}
+	}
+	prev := -1
+	if raw, ok := cfg["prevTaskbarAutoHide"]; ok {
+		json.Unmarshal(raw, &prev)
+	}
+	if prev < 0 {
+		return // the dock already put auto-hide back (or never changed it)
+	}
+	setTaskbarAutoHide(prev)
+	cfg["prevTaskbarAutoHide"] = json.RawMessage("-1")
+	if nb, err := json.MarshalIndent(cfg, "", "  "); err == nil {
+		writeFileAtomic(p, nb)
+	}
 }
 
 type installOpts struct {
@@ -517,7 +587,7 @@ func runSetup() (runHere bool) {
 			Startup: o.Startup, Desktop: o.Desktop, Dark: dark, Accent: acc, OnAccent: on}
 	})
 	hst.bind("mdInstall", func(o installOpts) string {
-		if err := doInstall(o, exePath()); err != nil {
+		if err := installKeepingWindowAlive(o); err != nil {
 			logLine("install failed: %v", err)
 			return err.Error()
 		}
@@ -531,6 +601,8 @@ func runSetup() (runHere bool) {
 		quit()
 		return true
 	})
+	// the setup page's "Uninstall old version": the same full uninstall as Settings › Apps
+	hst.bind("mdUninstallOld", func() bool { uninstallAll(false, true); return true })
 	hst.bind("mdOpenInstalled", func() bool { launch = "installed"; quit(); return true })
 	hst.bind("mdRunHere", func() bool { launch = "here"; quit(); return true })
 	hst.load(setupHTML)
@@ -544,7 +616,12 @@ func runSetup() (runHere bool) {
 		pTranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
 		pDispatchMessageW.Call(uintptr(unsafe.Pointer(&msg)))
 	}
+	// The setup window can be installing a replacement and launching it immediately.
+	// Close WebView2 before starting that process so Chromium tears down its child
+	// windows while this setup process still has a message pump and a live parent.
+	hst.close()
 	pShowWindow.Call(hwnd, SW_HIDE)
+	pDestroyWindow(hwnd)
 	switch launch {
 	case "installed":
 		launchInstalled()
@@ -552,6 +629,48 @@ func runSetup() (runHere bool) {
 		return true
 	}
 	return false
+}
+
+// installKeepingWindowAlive runs doInstall on its own thread and keeps this window's
+// messages flowing meanwhile, so Setup doesn't show "Not responding" while it waits
+// for a running dock to close.
+func installKeepingWindowAlive(o installOpts) error {
+	done := make(chan error, 1)
+	go func() {
+		runtime.LockOSThread() // COM (shortcuts) is set up per thread
+		defer runtime.UnlockOSThread()
+		defer func() {
+			if r := recover(); r != nil {
+				done <- fmt.Errorf("setup stopped unexpectedly: %v", r)
+			}
+		}()
+		done <- doInstall(o, exePath())
+	}()
+	var msg MSG
+	quitLater := false
+	for {
+		select {
+		case err := <-done:
+			if quitLater {
+				pPostQuitMessage.Call(0) // the window was closed during the install
+			}
+			return err
+		default:
+		}
+		for {
+			r, _, _ := pPeekMessageW.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0, 1) // PM_REMOVE
+			if r == 0 {
+				break
+			}
+			if msg.Message == 0x0012 { // WM_QUIT: finish installing first
+				quitLater = true
+				continue
+			}
+			pTranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
+			pDispatchMessageW.Call(uintptr(unsafe.Pointer(&msg)))
+		}
+		time.Sleep(15 * time.Millisecond)
+	}
 }
 
 func askYesNo(text, title string) bool {
@@ -572,29 +691,111 @@ func runQuietUpdate() {
 
 // ---------- uninstall ----------
 
-func runUninstall(quiet bool) {
-	if !quiet && !askYesNo("Remove DG-Dock from this PC?\n\nThe Windows taskbar will be put back. Your dock settings and icon packs are kept, in case you install it again.", "Uninstall DG-Dock") {
+func runUninstall(quiet bool) { uninstallAll(quiet, false) }
+
+// uninstallAll removes DG-Dock completely. fromSetup: the setup window is open and is
+// using DG-Dock's WebView2 folder, so that folder is left for setup to use.
+func uninstallAll(quiet, fromSetup bool) {
+	if !quiet && !askYesNo("Remove DG-Dock from this PC?\n\n"+
+		"Everything DG-Dock added is removed: the app, its settings, icon packs, Launchpad folders and the "+
+		"Pictures › DG-Dock Icon folder (with any icons you put in it). The Windows taskbar is put back.\n\n"+
+		"Photos imported from USB drives (Pictures › Imported) are yours and are kept.\n\n"+
+		"To keep your setup for later, cancel and use Settings › About › Save my setup first.", "Uninstall DG-Dock") {
 		return
 	}
 	stopRunningDocks()
+	restoreTaskbarAfterDock() // in case a dock had to be force-closed, or had crashed
+	// start with Windows, and Settings › Apps (also the entries from when it was called Mac Dock)
 	if k, err := registry.OpenKey(registry.CURRENT_USER, runKey, registry.SET_VALUE); err == nil {
 		k.DeleteValue(runValueName)
+		k.DeleteValue(oldRunValue)
 		k.Close()
 	}
 	registry.DeleteKey(registry.CURRENT_USER, uninstallKey)
-	os.Remove(startMenuLnk())
-	os.Remove(desktopLnk())
+	registry.DeleteKey(registry.CURRENT_USER, oldUninstallKey)
+	// shortcuts
+	for _, l := range []string{startMenuLnk(), desktopLnk()} {
+		os.Remove(l)
+		os.Remove(oldLnk(l))
+	}
+	// settings, icon packs, the log and the WebView2 cache, under both names
+	roaming := os.Getenv("APPDATA")
 	local, _ := os.UserCacheDir()
-	os.RemoveAll(filepath.Join(local, appName)) // WebView2 cache
-	// A running program can't delete itself, but it can move out of the way: step into the
-	// temp folder (Windows clears that out), then remove the install folder.
+	for _, d := range []string{
+		filepath.Join(roaming, appName), filepath.Join(roaming, oldDataFolder),
+		filepath.Join(local, oldDataFolder),
+		filepath.Join(local, "Programs", oldFolder),
+	} {
+		if d != "" && filepath.Base(d) != "" && !strings.EqualFold(d, roaming) && !strings.EqualFold(d, local) {
+			os.RemoveAll(d)
+		}
+	}
+	if fromSetup { // all but the WebView2 cache setup is using right now
+		if ents, err := os.ReadDir(filepath.Join(local, appName)); err == nil {
+			for _, e := range ents {
+				if !strings.EqualFold(e.Name(), "WebView2") {
+					os.RemoveAll(filepath.Join(local, appName, e.Name()))
+				}
+			}
+		}
+	} else {
+		os.RemoveAll(filepath.Join(local, appName))
+	}
+	// the icons folder DG-Dock made in Pictures
+	pics := knownFolder("{33E28130-4E1E-4676-835A-98395C3BC3BB}")
+	if pics == "" {
+		pics = filepath.Join(os.Getenv("USERPROFILE"), "Pictures")
+	}
+	if pics != "" {
+		os.RemoveAll(filepath.Join(pics, "DG-Dock Icon"))
+	}
+	// leftovers from interrupted updates
+	for _, p := range []string{installedPath() + ".old", installedPath() + ".new"} {
+		os.Remove(p)
+	}
+	// A running program can't delete itself: step into the temp folder, remove the install
+	// folder, then have a hidden helper delete this last copy once it has closed.
 	dir := installDir()
-	if self := exePath(); strings.HasPrefix(strings.ToLower(self), strings.ToLower(dir)+`\`) {
-		os.Rename(self, filepath.Join(os.TempDir(), fmt.Sprintf("DG-Dock-uninstalled-%d.exe", time.Now().Unix())))
+	self := exePath()
+	if strings.HasPrefix(strings.ToLower(self), strings.ToLower(dir)+`\`) {
+		moved := filepath.Join(os.TempDir(), fmt.Sprintf("DG-Dock-uninstalled-%d.exe", time.Now().Unix()))
+		if os.Rename(self, moved) == nil {
+			self = moved
+		}
 	}
 	os.RemoveAll(dir)
+	if !strings.HasPrefix(strings.ToLower(self), strings.ToLower(os.TempDir())) {
+		self = "" // never delete a setup file you ran from somewhere else
+	}
+	if !fromSetup { // (setup is about to install again into that folder)
+		cleanupAfterExit(self, dir)
+	}
 	if !quiet {
-		messageBox("DG-Dock has been uninstalled.", appName)
+		messageBox("DG-Dock has been uninstalled, and nothing of it is left on this PC.", appName)
+	}
+}
+
+// cleanupAfterExit starts a hidden helper that waits for this process to close, then
+// deletes its exe (and the install folder, if anything in it was still in use).
+func cleanupAfterExit(exe, dir string) {
+	cmd := fmt.Sprintf(`/c ping -n 4 127.0.0.1 >nul & rmdir /s /q "%s"`, dir)
+	if exe != "" {
+		cmd = fmt.Sprintf(`/c ping -n 4 127.0.0.1 >nul & del /f /q "%s" & rmdir /s /q "%s"`, exe, dir)
+	}
+	comspec := os.Getenv("ComSpec")
+	if comspec == "" {
+		comspec = filepath.Join(os.Getenv("SystemRoot"), "System32", "cmd.exe")
+	}
+	var si windows.StartupInfo
+	var pi windows.ProcessInformation
+	si.Cb = uint32(unsafe.Sizeof(si))
+	line, err := windows.UTF16PtrFromString(`"` + comspec + `" ` + cmd)
+	if err != nil {
+		return
+	}
+	if windows.CreateProcess(nil, line, nil, nil, false, windows.CREATE_NO_WINDOW, nil, nil, &si, &pi) == nil {
+		windows.CloseHandle(pi.Thread)
+		windows.CloseHandle(pi.Process)
 	}
 }
 
@@ -616,6 +817,10 @@ func handleSetupArgs() bool {
 	case has("--update"):
 		runQuietUpdate()
 		return false
+	case has("--display"): // an extra dock for another display, started by the main dock
+		return true
+	case has("--wait"): // the dock restarting itself after restoring a setup
+		return true
 	case has("--portable"), isInstalledCopy():
 		return true
 	}

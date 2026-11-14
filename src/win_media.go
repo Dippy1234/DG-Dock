@@ -22,9 +22,41 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+func (a *App) changeMediaWidgetIconDialog(owner uintptr) {
+	path := pickPath(owner, false, "Choose a default Now Playing image", [][2]string{
+		{"Images and icons", "*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.ico;*.exe;*.dll;*.lnk"},
+		{"All files", "*.*"},
+	})
+	if path == "" {
+		return
+	}
+	a.setMediaWidgetIcon(path)
+}
+
+func (a *App) setMediaWidgetIcon(path string) bool {
+	if path != "" {
+		if a.customIcon(path) == nil {
+			messageBox("That file doesn't contain an image DG-Dock can use.", appName)
+			return false
+		}
+		path = a.keepCustomIcon("widget:media", path)
+	}
+	a.cfg.MediaWidgetIcon = path
+	a.mediaFallbackPath, a.mediaFallbackArt = "", nil
+	if it := a.items["w:media"]; it != nil {
+		it.DefaultArt = a.mediaFallbackIcon()
+	}
+	a.saveConfig()
+	a.needRender = true
+	a.render()
+	a.refreshSettings()
+	return true
+}
+
 var (
 	combase                          = windows.NewLazySystemDLL("combase.dll")
 	pRoInitialize                    = combase.NewProc("RoInitialize")
+	pRoUninitialize                  = combase.NewProc("RoUninitialize")
 	pRoGetActivationFactory          = combase.NewProc("RoGetActivationFactory")
 	pWindowsCreateString             = combase.NewProc("WindowsCreateString")
 	pWindowsDeleteString             = combase.NewProc("WindowsDeleteString")
@@ -182,7 +214,11 @@ func (m *mediaWatcher) run() {
 			app.logf("media watcher stopped: %v", r)
 		}
 	}()
-	pRoInitialize.Call(1) // multithreaded
+	if hr, _, _ := pRoInitialize.Call(1); !hresultOK(hr) { // RO_INIT_MULTITHREADED
+		app.logf("media: RoInitialize failed (%x)", hr)
+		return
+	}
+	defer pRoUninitialize.Call()
 	if pRoGetActivationFactory.Find() != nil {
 		return
 	}
@@ -205,12 +241,14 @@ func (m *mediaWatcher) run() {
 		return
 	}
 	m.alive = true
+	pollTimer := time.NewTicker(450 * time.Millisecond)
+	defer pollTimer.Stop()
 	for {
 		m.poll(mgr)
 		select {
 		case <-m.poke:
 			time.Sleep(250 * time.Millisecond) // let the player react to a button first
-		case <-time.After(450 * time.Millisecond):
+		case <-pollTimer.C:
 		}
 	}
 }
@@ -327,6 +365,7 @@ func (a *App) onMedia() {
 	}
 	if it := a.items["w:media"]; it != nil {
 		it.Art = a.mediaArt
+		it.DefaultArt = a.mediaFallbackIcon()
 		it.WPlaying = st.Playing
 		it.WText1 = st.Title
 		it.WAccent = a.mediaAccent
@@ -338,6 +377,23 @@ func (a *App) onMedia() {
 	}
 	a.needRender = true
 	a.render()
+}
+
+func (a *App) mediaFallbackIcon() *IconSet {
+	path := a.cfg.MediaWidgetIcon
+	if path == "" {
+		a.mediaFallbackPath, a.mediaFallbackArt = "", nil
+		return nil
+	}
+	if a.mediaFallbackPath == path && a.mediaFallbackArt != nil {
+		return a.mediaFallbackArt
+	}
+	a.mediaFallbackPath = path
+	a.mediaFallbackArt = nil
+	if img := a.customIcon(path); img != nil {
+		a.mediaFallbackArt = NewIconSet(ScaleIconArtwork(img, float64(a.cfg.WidgetIconScale)/100))
+	}
+	return a.mediaFallbackArt
 }
 
 func (a *App) mediaPop() PopContent {
@@ -486,34 +542,39 @@ func (a *App) growWave(it *Item) {
 	a.waveGrowAt = time.Now()
 }
 
-// updateWave animates the sound-wave bars (about 30 times a second while music plays).
+// updateWave samples audio at a modest rate, then animates bars on every rendered frame.
 func (a *App) updateWave() {
 	it := a.items["w:media"]
 	if it == nil || a.hiddenFullscreen {
 		return
 	}
 	a.growWave(it)
-	if time.Since(a.waveAt) < 33*time.Millisecond {
-		return
-	}
-	a.waveAt = time.Now()
-	t := time.Since(a.waveT0).Seconds()
-	peak := 0.0
-	if it.WPlaying {
+	now := time.Now()
+	if it.WPlaying && (a.waveAt.IsZero() || now.Sub(a.waveAt) >= 33*time.Millisecond) {
+		a.waveAt = now
 		if p := a.audioPeak(); p >= 0 {
-			peak = math.Min(1, math.Sqrt(p)*1.25)
+			a.wavePeak = math.Min(1, math.Sqrt(p)*1.25)
 		} else {
-			peak = 0.6 // no meter: keep a gentle animation
+			a.wavePeak = 0.6 // no meter: keep a gentle animation
 		}
+	} else if !it.WPlaying {
+		a.wavePeak = 0
 	}
+	dt := now.Sub(a.waveFrameAt).Seconds()
+	if a.waveFrameAt.IsZero() || dt <= 0 || dt > 0.1 {
+		dt = 1.0 / 60
+	}
+	a.waveFrameAt = now
+	alpha := 1 - math.Exp(-dt/0.05)
+	t := now.Sub(a.waveT0).Seconds()
 	moving := false
 	for i := range it.WLevels {
 		ph := float64(i) * 1.37
 		target := 0.12
 		if it.WPlaying {
-			target = 0.12 + 0.88*peak*(0.35+0.65*math.Abs(math.Sin(t*(5.3+float64(i%5)*1.1)+ph)))
+			target = 0.12 + 0.88*a.wavePeak*(0.35+0.65*math.Abs(math.Sin(t*(5.3+float64(i%5)*1.1)+ph)))
 		}
-		nv := it.WLevels[i] + (target-it.WLevels[i])*0.45
+		nv := it.WLevels[i] + (target-it.WLevels[i])*alpha
 		if math.Abs(nv-it.WLevels[i]) > 0.004 {
 			moving = true
 		}

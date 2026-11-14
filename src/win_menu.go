@@ -56,7 +56,7 @@ const (
 	WM_RBUTTONDOWN    = 0x0204
 )
 
-func (a *App) menuDark() bool { return a.dock.Dark }
+func (a *App) menuDark() bool { return a.uiDark() }
 
 func (a *App) renderMenu(mw *menuWin) {
 	renderMenuPure(a.te, a.glyphs, a.dock.Scale, a.menuDark(), mw.acrylic, mw.canvas, mw.w, mw.h, mw.menu, mw.hot, mw.open)
@@ -121,7 +121,9 @@ func (a *App) openMenuWin(m *macMenu, x, y int32, owner uintptr) *menuWin {
 	back, _, _ := pCreateWindowExW.Call(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE|WS_EX_TOPMOST, up(u16("DGDockMenuBack")), 0, WS_POPUP,
 		uintptr(x), uintptr(y), uintptr(W), uintptr(H), owner, 0, hinst, 0)
 	if back != 0 {
-		corner := uint32(2) // DWMWCP_ROUND (8px, like Windows menus)
+		// Windows' own rounded corners: the acrylic blur ignores a window region, so a
+		// region left square corners showing (Build 244)
+		corner := uint32(2) // DWMWCP_ROUND
 		pDwmSetWindowAttribute.Call(back, 33, uintptr(unsafe.Pointer(&corner)), 4)
 		tint := uint32(0x99202020)
 		if !a.menuDark() {
@@ -428,20 +430,34 @@ func (a *App) runMenu(m *macMenu) {
 
 	d := a.dock
 	cx, cy := getCursorPos()
-	mu, _ := d.toUV(float64(cx-a.winX), float64(cy-a.winY))
+	ox, oy := a.winX, a.winY
+	clamp := a.mon
+	mu, _ := d.toUV(float64(cx-ox), float64(cy-oy))
 	fx, fy := d.toXY(mu, d.PlateV1+gap)
-	ax, ay := float64(a.winX)+fx, float64(a.winY)+fy
+	ax, ay := float64(ox)+fx, float64(oy)+fy
 	var x, y float64
 	switch d.Orient {
 	case OrientLeft:
 		x, y = ax, float64(cy)-H/2
 	case OrientRight:
 		x, y = ax-W, float64(cy)-H/2
+	case OrientTop:
+		x, y = float64(cx)-W/2, ay
 	default:
 		x, y = float64(cx)-W/2, ay-H
 	}
-	x = math.Max(float64(a.mon.Left)+4, math.Min(x, float64(a.mon.Right)-W-4))
-	y = math.Max(float64(a.mon.Top)+4, math.Min(y, float64(a.mon.Bottom)-H-4))
+	a.runMenuAt(m, x, y, clamp)
+}
+
+// runMenuAt shows a menu with its top-left corner at x, y (kept inside clamp).
+func (a *App) runMenuAt(m *macMenu, x, y float64, clamp RECT) {
+	if len(m.items) == 0 || session != nil {
+		return
+	}
+	d := a.dock
+	W, H := layoutMenuPure(a.te, d.Scale, m)
+	x = math.Max(float64(clamp.Left)+4, math.Min(x, float64(clamp.Right)-W-4))
+	y = math.Max(float64(clamp.Top)+4, math.Min(y, float64(clamp.Bottom)-H-4))
 
 	session = &menuSession{}
 	root := a.openMenuWin(m, int32(x), int32(y), a.hwnd)
@@ -576,8 +592,8 @@ func (a *App) itemMenu(it *Item) {
 		}
 		m.addG(GlyphFolder, "Open in File Explorer", func() { shellOpen(it.Target, "") })
 	case it.Kind == KindStart:
+		m.addG(GlyphApps, "Launchpad", func() { a.toggleLaunchpad() })
 		m.addG(GlyphSearch, "Search", func() { a.showSearch() })
-		m.addG(GlyphStart, "Open Windows Start", func() { launchItem(it) })
 	default:
 		if len(it.Windows) > 0 {
 			m.addG(GlyphNewWindow, "New window", func() { a.launch(it) })
@@ -591,22 +607,9 @@ func (a *App) itemMenu(it *Item) {
 	}
 
 	m.sep()
-	if it.Pin != nil {
-		m.addG(GlyphBrush, "Change icon", func() {
-			if a.pack != nil {
-				a.openIconPicker(it.PinIdx)
-			} else {
-				a.changeIconDialog(it)
-			}
-		})
-		if it.Pin.Icon != "" {
-			m.addG(GlyphReset, "Reset icon", func() { a.setPinIcon(it, "") })
-		}
-	}
-	if it.Pin != nil && it.Kind != KindTrash {
-		idx := it.PinIdx
-		m.addG(GlyphUnpin, "Remove from Dock", func() { a.removePinAt(idx) })
-	} else if it.Kind == KindRunning {
+	// Changing icons and removing items live in Settings › Edit Dock (and dragging an
+	// icon off the dock), so this menu stays short and hard to misclick.
+	if it.Kind == KindRunning && it.Pin == nil && !isSecondary() {
 		m.addG(GlyphPin, "Keep in Dock", func() { a.keepInDock(it) })
 	}
 	if len(it.Windows) > 0 {
@@ -628,6 +631,14 @@ func (a *App) itemMenu(it *Item) {
 
 func (a *App) dockMenu() {
 	m := &macMenu{}
+	if isSecondary() {
+		// an extra dock: it follows the main dock, so changes are made in Settings
+		m.addG(GlyphSearch, "Search", func() { a.showSearch() })
+		m.sep()
+		m.addG(GlyphSettings, "Dock settings", func() { a.openSettings() })
+		a.runMenu(m)
+		return
+	}
 	if _, ver := updates.found(); ver > 0 {
 		m.addG(GlyphReset, fmt.Sprintf("Update to version %d", ver), func() { a.startUpdate() })
 		m.sep()
@@ -644,12 +655,19 @@ func (a *App) dockMenu() {
 	} else {
 		m.addG(GlyphMonitor, "Hide the Windows taskbar", func() { a.setHideTaskbar(true) })
 	}
+	if a.hasPin(KindTrash, "") >= 0 {
+		if !a.cfg.LockDock {
+			m.addG(GlyphDelete, "Remove Recycle Bin from Dock", func() { a.setDockSpecialPin(KindTrash, false) })
+		}
+	} else {
+		m.addG(GlyphAdd, "Add Recycle Bin to Dock", func() { a.setDockSpecialPin(KindTrash, true) })
+	}
 	m.sep()
 	pos := m.sub(GlyphDockBottom, "Position on screen")
 	for _, o := range []struct {
 		n, v string
 		g    rune
-	}{{"Bottom", "bottom", GlyphDockBottom}, {"Left", "left", GlyphDockLeft}, {"Right", "right", GlyphDockRight}} {
+	}{{"Bottom", "bottom", GlyphDockBottom}, {"Top", "top", GlyphDockBottom}, {"Left", "left", GlyphDockLeft}, {"Right", "right", GlyphDockRight}} {
 		v := o.v
 		pos.addG(o.g, o.n, func() { a.setPosition(v) }).Checked = orientOf(a.cfg.Position) == orientOf(v)
 	}
@@ -665,6 +683,14 @@ func (a *App) dockMenu() {
 	m.addG(GlyphNewFolder, "Add folder…", func() { a.addFolderDialog(a.hwnd) })
 	m.addG(GlyphAdd, "Add program or file…", func() { a.addFileDialog(a.hwnd) })
 	m.sep()
+	m.addG(GlyphSettings, "Dock settings", func() { a.openSettings() })
+	m.addG(GlyphPower, "Quit DG-Dock", func() { a.quit() })
+	a.runMenu(m)
+}
+
+// widgetMenu keeps widget context menus focused on app-level actions.
+func (a *App) widgetMenu() {
+	m := &macMenu{}
 	m.addG(GlyphSettings, "Dock settings", func() { a.openSettings() })
 	m.addG(GlyphPower, "Quit DG-Dock", func() { a.quit() })
 	a.runMenu(m)

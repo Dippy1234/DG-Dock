@@ -95,6 +95,18 @@ func (i *ICoreWebView2Controller) PutIsVisible(isVisible bool) error {
 	return nil
 }
 
+// Close releases the WebView2 controller and destroys its hosted child window.
+func (i *ICoreWebView2Controller) Close() error {
+	if i == nil || i.vtbl == nil {
+		return nil
+	}
+	_, _, err := i.vtbl.Close.Call(uintptr(unsafe.Pointer(i)))
+	if err != windows.ERROR_SUCCESS {
+		return err
+	}
+	return nil
+}
+
 func (i *ICoreWebView2Controller) GetICoreWebView2Controller2() *ICoreWebView2Controller2 {
 
 	var result *ICoreWebView2Controller2

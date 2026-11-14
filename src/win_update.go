@@ -112,7 +112,7 @@ func (a *App) onUpdateFound() {
 	a.cfg.UpdatePrompted = ver
 	a.saveConfig()
 	go func() {
-		if askYesNo(fmt.Sprintf("DG-Dock version %d is in your Downloads.\n\nUpdate now? Your dock, settings and icon packs stay as they are.", ver), appName) {
+		if askYesNo(fmt.Sprintf("DG-Dock build %d is in your Downloads.\n\nUpdate now? Your dock, settings and icon packs stay as they are.\n\nUpdating from here skips the \"Windows protected your PC\" warning.", ver), appName) {
 			pPostMessageW.Call(a.hwnd, wmUpdate, 1, 0)
 		}
 	}()
@@ -121,13 +121,29 @@ func (a *App) onUpdateFound() {
 // startUpdate hands over to the new exe, which closes this dock, installs itself
 // and starts again.
 func (a *App) startUpdate() {
-	path, _ := updates.found()
+	path, ver := updates.found()
 	if path == "" {
 		return
 	}
+	// Check again right before running it: it must still be a DG-Dock exe, newer than
+	// this one (the file could have been swapped since it was found).
+	if v := fileVersion(path); v <= appVersion || v != ver {
+		messageBox("That update file has changed since it was found, so it wasn't started.", appName)
+		return
+	}
+	// The person chose to install it, so take off the "downloaded from the internet"
+	// mark (the same as Properties › Unblock). Otherwise Windows can show the
+	// SmartScreen warning for the installer and for files it starts.
+	unblockFile(path)
 	if err := exec.Command(path, "--update").Start(); err != nil {
 		messageBox("Couldn't start the update: "+err.Error(), appName)
 	}
+}
+
+// unblockFile removes the Mark of the Web (the Zone.Identifier stream that browsers
+// add to downloads), like the Unblock box in a file's Properties.
+func unblockFile(path string) {
+	os.Remove(path + ":Zone.Identifier")
 }
 
 // isDockExeName reports whether a (lower-case) file name looks like one of our exes.

@@ -23,6 +23,7 @@ type webHost struct {
 	binds      map[string]reflect.Value
 	onClose    func()
 	onActivate func(active bool)
+	minW, minH int32 // smallest size (DIPs), for resizable windows
 }
 
 var (
@@ -65,6 +66,16 @@ func webWndProc(hwnd, msg, wp, lp uintptr) uintptr {
 		case 0x0084: // WM_NCHITTEST
 			if h.borderless {
 				return 1
+			}
+		case 0x0024: // WM_GETMINMAXINFO
+			if h.minW > 0 {
+				dpi, _, _ := pGetDpiForWindow.Call(hwnd)
+				if dpi == 0 {
+					dpi = 96
+				}
+				mm := (*[10]int32)(unsafe.Pointer(lp)) // MINMAXINFO: ptMinTrackSize is [6], [7]
+				mm[6], mm[7] = h.minW*int32(dpi)/96, h.minH*int32(dpi)/96
+				return 0
 			}
 		case 0x0010: // WM_CLOSE
 			if h.onClose != nil {
@@ -135,6 +146,31 @@ func (h *webHost) eval(js string) {
 	}
 }
 
+func (h *webHost) close() {
+	if h == nil {
+		return
+	}
+	if h.web != nil {
+		if controller := h.web.GetController(); controller != nil {
+			if err := controller.Close(); err != nil {
+				app.logf("WebView2 controller close: %v", err)
+			}
+		}
+		h.web = nil
+	}
+	delete(webHosts, h.hwnd)
+}
+
+func closeWebHosts() {
+	for hwnd, h := range webHosts {
+		if h != nil {
+			h.close()
+		} else {
+			delete(webHosts, hwnd)
+		}
+	}
+}
+
 type webCall struct {
 	ID     int               `json:"id"`
 	Method string            `json:"method"`
@@ -187,20 +223,4 @@ func (h *webHost) call(c webCall) (res any, err error) {
 		return nil, nil
 	}
 	return out[0].Interface(), nil
-}
-
-func registerWebClass(name string, bg uintptr) {
-	hinst, _, _ := pGetModuleHandleW.Call(0)
-	cur, _, _ := pLoadCursorW.Call(0, 32512)
-	icon, _, _ := user32.NewProc("LoadImageW").Call(hinst, 1, 1, 32, 32, 0)
-	wc := WNDCLASSEXW{
-		LpfnWndProc:   webWndProcCB,
-		HInstance:     hinst,
-		HIcon:         icon,
-		HCursor:       cur,
-		HbrBackground: bg,
-		LpszClassName: u16(name),
-	}
-	wc.CbSize = uint32(unsafe.Sizeof(wc))
-	pRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc)))
 }

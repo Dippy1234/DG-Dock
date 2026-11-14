@@ -20,7 +20,9 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -54,8 +56,10 @@ type trayStore struct {
 	mu      sync.Mutex
 	icons   map[string]*trayIcon
 	next    int
-	hwnd    uintptr // our Shell_TrayWnd
-	notify  uintptr // dock window to tell about changes
+	hwnd    atomic.Uintptr // our Shell_TrayWnd (set and cleared on the tray thread, read on others)
+	done    chan struct{}  // closed when the tray thread has finished
+	closing bool           // stopTray has asked the tray thread to finish
+	notify  uintptr        // dock window to tell about changes
 	pending bool
 	created uint32 // "TaskbarCreated"
 }
@@ -70,7 +74,8 @@ func explorerTray() uintptr {
 		if h == 0 {
 			return 0
 		}
-		if h != tray.hwnd {
+		// skip DG-Dock's own tray window (the main dock's, when this is an extra dock)
+		if exe := windowExe(h); h != tray.hwnd.Load() && (exe == "" || !strings.EqualFold(filepath.Base(exe), filepath.Base(exePath()))) {
 			return h
 		}
 		prev = h
@@ -83,19 +88,31 @@ var trayProcCB = syscall.NewCallback(trayWndProc)
 // startTray starts the tray host on its own thread (so apps adding icons never wait on
 // the dock's drawing).
 func (a *App) startTray() {
-	if tray.hwnd != 0 {
+	if tray.closing && tray.done != nil {
+		// turned off and straight back on: let the old tray thread finish first, or
+		// this would see its window, return early, and the tray would stay off
+		select {
+		case <-tray.done:
+		case <-time.After(2 * time.Second):
+		}
+	}
+	tray.closing = false
+	if tray.hwnd.Load() != 0 {
 		return
 	}
 	tray.notify = a.hwnd
 	ready := make(chan struct{})
+	done := make(chan struct{})
+	tray.done = done
 	go func() {
+		defer close(done)
 		runtime.LockOSThread()
 		hinst, _, _ := pGetModuleHandleW.Call(0)
 		wc := WNDCLASSEXW{LpfnWndProc: trayProcCB, HInstance: hinst, LpszClassName: u16("Shell_TrayWnd")}
 		wc.CbSize = uint32(unsafe.Sizeof(wc))
 		pRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc)))
 		h, _, _ := pCreateWindowExW.Call(WS_EX_TOOLWINDOW|WS_EX_TOPMOST, up(u16("Shell_TrayWnd")), 0, WS_POPUP, 0, 0, 0, 0, 0, 0, hinst, 0)
-		tray.hwnd = h
+		tray.hwnd.Store(h)
 		close(ready)
 		if h == 0 {
 			return
@@ -105,6 +122,8 @@ func (a *App) startTray() {
 		pSetTimer.Call(h, 1, 1000, 0)
 		// ask every app to add its icons again, so the ones already there reach us too
 		pSendNotifyMessageW.Call(0xFFFF, uintptr(tray.created), 0, 0)
+		// …and once more shortly after, for apps that were busy or still starting
+		pSetTimer.Call(h, 2, 5000, 0)
 		var msg MSG
 		for {
 			r, _, _ := pGetMessageW.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
@@ -120,7 +139,8 @@ func (a *App) startTray() {
 
 // stopTray hands the tray back to Explorer.
 func stopTray() {
-	if h := tray.hwnd; h != 0 {
+	if h := tray.hwnd.Load(); h != 0 {
+		tray.closing = true
 		pPostMessageW.Call(h, WM_CLOSE, 0, 0)
 	}
 }
@@ -133,7 +153,7 @@ func registerMsg(name string) uintptr {
 // trayOnTop keeps our window above Explorer's (FindWindow returns the topmost one), and
 // the same size and place as the real taskbar for anything that asks where it is.
 func trayOnTop() {
-	h := tray.hwnd
+	h := tray.hwnd.Load()
 	var r RECT
 	if ex := explorerTray(); ex != 0 {
 		pGetWindowRect.Call(ex, uintptr(unsafe.Pointer(&r)))
@@ -156,6 +176,11 @@ func trayForward(msg uint32, wp, lp uintptr) uintptr {
 }
 
 func trayWndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
+	defer func() {
+		if r := recover(); r != nil {
+			crashed(r) // gives the taskbar back before exiting
+		}
+	}()
 	switch msg {
 	case 0x004A: // WM_COPYDATA
 		type copyData struct {
@@ -172,6 +197,11 @@ func trayWndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 		}
 		return res
 	case WM_TIMER:
+		if wp == 2 {
+			pKillTimer(hwnd, 2)
+			pSendNotifyMessageW.Call(0xFFFF, uintptr(tray.created), 0, 0)
+			return 0
+		}
 		trayOnTop() // stay first in line, and the same size as the taskbar
 		tray.prune()
 		return 0
@@ -179,10 +209,14 @@ func trayWndProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 		pDestroyWindowProc.Call(hwnd)
 		return 0
 	case 0x0002: // WM_DESTROY
-		tray.hwnd = 0
+		tray.hwnd.Store(0)
 		tray.mu.Lock()
 		tray.icons = map[string]*trayIcon{}
 		tray.mu.Unlock()
+		// hand the icons straight back: apps add them to the Windows taskbar again
+		if tray.created != 0 {
+			pSendNotifyMessageW.Call(0xFFFF, uintptr(tray.created), 0, 0)
+		}
 		pPostQuitMessage.Call(0)
 		return 0
 	case 0x0111: // WM_COMMAND (e.g. "show desktop" sent by other apps)
@@ -509,6 +543,7 @@ func (a *App) closePop() {
 
 // openWindowsStart opens the Windows Start menu.
 func openWindowsStart() {
+	shellKeysHere()
 	pKeybdEvent.Call(0x5B, 0, 0, 0)
 	pKeybdEvent.Call(0x5B, 0, 2, 0)
 }
@@ -566,9 +601,64 @@ func (a *App) trayRowIcon(ic trayIcon) (is *IconSet, big bool) {
 	return ic.icon, false
 }
 
+func (a *App) trayWidgetIcon() *IconSet {
+	path := a.cfg.IconOverrides["widget:tray"]
+	if path == "" {
+		return nil
+	}
+	img := a.customIcon(path)
+	if img == nil {
+		return nil
+	}
+	dark := true
+	if a.dock != nil {
+		dark = a.dock.Dark
+	}
+	style := "plain"
+	switch a.cfg.IconStyle {
+	case "circle":
+		style = "circle-light"
+		if dark || a.cfg.Style != "glass" {
+			style = "circle-dark"
+		}
+	case "original":
+		style = "plain"
+	default:
+		style = "tile-light"
+		if dark || a.cfg.Style != "glass" {
+			style = "tile-dark"
+		}
+	}
+	key := fmt.Sprintf("widget-tray:%s|%s|scale-%d", path, style, a.cfg.WidgetIconScale)
+	if icon := a.styled[key]; icon != nil {
+		return icon
+	}
+	icon := NewIconSet(ScaleIconArtwork(styleIcon(img, style), float64(a.cfg.WidgetIconScale)/100))
+	a.styled[key] = icon
+	return icon
+}
+
+func (a *App) changeTrayWidgetIconDialog(owner uintptr) {
+	path := pickPath(owner, false, "Choose a System tray widget icon", [][2]string{
+		{"Icons and images", "*.png;*.ico;*.jpg;*.jpeg;*.bmp;*.gif;*.exe;*.dll;*.lnk"},
+		{"All files", "*.*"},
+	})
+	if path == "" {
+		return
+	}
+	if a.customIcon(path) == nil {
+		messageBox("That file doesn't contain an icon or image DG-Dock can use.", appName)
+		return
+	}
+	a.setIconOverride("widget:tray", path)
+}
+
 // overrideIcon loads (and keeps) a full-size icon from a file.
 func (a *App) overrideIcon(path string) *IconSet {
 	k := "ov:" + path
+	if _, dyn := a.dynVariant(path); dyn {
+		k += a.packSig()
+	}
 	if is, ok := a.styled[k]; ok {
 		return is
 	}
@@ -588,7 +678,7 @@ func (a *App) setIconOverride(key, path string) {
 	if path == "" {
 		delete(a.cfg.IconOverrides, key)
 	} else {
-		a.cfg.IconOverrides[key] = path
+		a.cfg.IconOverrides[key] = a.keepCustomIcon(key, path)
 	}
 	a.saveConfig()
 	if strings.HasPrefix(key, "file:") {
@@ -600,11 +690,24 @@ func (a *App) setIconOverride(key, path string) {
 			}
 		}
 	}
+	if strings.HasPrefix(key, "app:") {
+		a.appIconChanged(key)
+	}
+	if key == "widget:tray" {
+		if it := a.items["w:tray"]; it != nil {
+			it.Icon = a.trayWidgetIcon()
+			it.scaled, it.scaledSrc = nil, nil
+			it.scaledSize = 0
+		}
+	}
 	if d := a.dock; d.PopItem != nil {
 		d.Pop = a.popContent(d.PopItem)
 	}
 	a.needRender = true
 	a.render()
+	if key == "widget:tray" {
+		a.refreshSettings()
+	}
 }
 
 // fileKey is the override key for a file or folder shown in a folder card.
@@ -662,15 +765,8 @@ func (a *App) packForFile(p string, dir bool) string {
 // changeKeyIcon lets you pick a new icon for a tray app or a file in a folder card: from
 // the icon pack when there is one, otherwise from a file.
 func (a *App) changeKeyIcon(key, name string) {
-	if a.pack == nil {
-		a.keyIconDialog(key, name)
-		return
-	}
 	a.pendingKey = [2]string{key, name}
-	a.openSettings()
-	if a.settings != nil {
-		a.settings.eval("window.mdCheckPending && window.mdCheckPending()")
-	}
+	a.openPendingInWindow()
 }
 
 func (a *App) keyIconDialog(key, name string) {
@@ -686,33 +782,6 @@ func (a *App) keyIconDialog(key, name string) {
 		return
 	}
 	a.setIconOverride(key, p)
-}
-
-// trayMenu is the tray tile's right-click menu: change any tray app's icon.
-func (a *App) trayMenu() {
-	m := &macMenu{}
-	icons := tray.list()
-	if len(icons) == 0 {
-		m.header("Nothing in the system tray yet")
-	} else {
-		m.header("Change a system tray icon")
-		seen := map[string]bool{}
-		for _, ic := range icons {
-			if seen[ic.exe] || ic.exe == "" {
-				continue
-			}
-			seen[ic.exe] = true
-			key, name := "tray:"+ic.exe, trayAppName(ic)
-			sm := m.sub(GlyphBrush, name)
-			sm.addG(GlyphBrush, "Change icon…", func() { a.changeKeyIcon(key, name) })
-			if a.cfg.IconOverrides[key] != "" {
-				sm.addG(GlyphReset, "Use original icon", func() { a.setIconOverride(key, "") })
-			}
-		}
-	}
-	m.sep()
-	m.addG(GlyphSettings, "Dock settings", func() { a.openSettings() })
-	a.runMenu(m)
 }
 
 // stackFileMenu is the shift + right-click menu for a tile in a folder card.
@@ -768,8 +837,8 @@ func quitTrayApp(ic trayIcon, name string) {
 		wins = []uintptr{ic.hwnd}
 	}
 	for _, h := range wins {
-		pPostMessageW.Call(h, 0x0011, 0, 0)  // WM_QUERYENDSESSION
-		pPostMessageW.Call(h, 0x0016, 1, 0)  // WM_ENDSESSION (yes, ending)
+		pPostMessageW.Call(h, 0x0011, 0, 0) // WM_QUERYENDSESSION
+		pPostMessageW.Call(h, 0x0016, 1, 0) // WM_ENDSESSION (yes, ending)
 		pPostMessageW.Call(h, WM_CLOSE, 0, 0)
 	}
 	go func() {
@@ -793,19 +862,118 @@ func (a *App) trayRowMenu(k string) {
 	if !ok {
 		return
 	}
-	key, name := "tray:"+ic.exe, trayAppName(ic)
+	name := trayAppName(ic)
 	m := &macMenu{}
 	m.header(name)
-	m.addG(GlyphOpen, "Open", func() { a.closePop(); trayClick(k, false) })
+	m.addG(GlyphOpen, "Open", func() { a.closePop(); a.trayOpen(k) })
 	m.addG(GlyphChevron, name+" menu", func() { a.closePop(); trayClick(k, true) })
-	m.sep()
-	m.addG(GlyphBrush, "Change icon…", func() { a.changeKeyIcon(key, name) })
-	if a.cfg.IconOverrides[key] != "" {
-		m.addG(GlyphReset, "Use original icon", func() { a.setIconOverride(key, "") })
-	}
 	if ic.exe != "" && !protectedExe(ic.exe) {
 		m.sep()
 		m.addG(GlyphClose, "Quit "+name, func() { a.closePop(); quitTrayApp(ic, name) })
 	}
 	a.runMenu(m)
+}
+
+// ---------- opening apps from the tray ----------
+
+var (
+	pAttachThreadInput  = user32.NewProc("AttachThreadInput")
+	pBringWindowToTop   = user32.NewProc("BringWindowToTop")
+	pGetCurrentThreadId = kernel32.NewProc("GetCurrentThreadId")
+	pIsHungAppWindow    = user32.NewProc("IsHungAppWindow")
+)
+
+const wmTrayFollow = WM_APP + 45
+
+// trayFollowState remembers a tray click for a short while, to check the app did what
+// was asked: its window came to the front, or (when it was already in front) went away.
+type trayFollowState struct {
+	exe      string
+	wasFront bool
+	front    uintptr
+}
+
+// forceForeground brings a window to the front even when Windows' focus rules would
+// only flash it on the taskbar.
+func forceForeground(h uintptr) {
+	if ic, _, _ := pIsIconic.Call(h); ic != 0 {
+		pShowWindowAsync.Call(h, SW_RESTORE)
+	}
+	fg, _, _ := pGetForegroundWindow.Call()
+	cur, _, _ := pGetCurrentThreadId.Call()
+	fgT, _, _ := pGetWindowThreadProcessId.Call(fg, 0)
+	if hung, _, _ := pIsHungAppWindow.Call(fg); hung != 0 {
+		fgT = 0 // a frozen app: don't tie our input to it
+	}
+	if fgT != 0 && fgT != cur {
+		pAttachThreadInput.Call(cur, fgT, 1)
+		defer pAttachThreadInput.Call(cur, fgT, 0)
+	}
+	pBringWindowToTop.Call(h)
+	pSetForegroundWindow.Call(h)
+}
+
+// trayOpen is a left click on a tray app: tells the app, then makes sure its window
+// really opens in front (or, if it was already in front, is put away like a dock click).
+func (a *App) trayOpen(key string) {
+	ic, ok := tray.get(key)
+	if !ok {
+		return
+	}
+	exe := normPath(windowExe(ic.hwnd))
+	fg, _, _ := pGetForegroundWindow.Call()
+	f := trayFollowState{exe: exe}
+	if exe != "" && !strings.HasSuffix(exe, `\explorer.exe`) && normPath(windowExe(fg)) == exe {
+		v, _, _ := pIsWindowVisible.Call(fg)
+		mi, _, _ := pIsIconic.Call(fg)
+		f.wasFront, f.front = v != 0 && mi == 0, fg
+	}
+	pAllowSetForegroundWindow.Call(^uintptr(0)) // ASFW_ANY: the app may use a helper process
+	trayClick(key, false)
+	if exe == "" || strings.HasSuffix(exe, `\explorer.exe`) {
+		return // Explorer's own icons (volume, USB…) show their own flyouts
+	}
+	a.trayFollow = f
+	a.trayFollowSeq++
+	seq, hwnd := a.trayFollowSeq, a.hwnd
+	go func() {
+		for step, ms := range []int{300, 800} {
+			time.Sleep(time.Duration(ms-[]int{0, 300}[step]) * time.Millisecond)
+			pPostMessageW.Call(hwnd, wmTrayFollow, seq, uintptr(step))
+		}
+	}()
+}
+
+// trayFollowUp runs shortly after a tray click (see trayOpen).
+func (a *App) trayFollowUp(seq, step uintptr) {
+	f := a.trayFollow
+	if seq != a.trayFollowSeq || f.exe == "" {
+		return
+	}
+	done := func() { a.trayFollow = trayFollowState{} }
+	fg, _, _ := pGetForegroundWindow.Call()
+	if f.wasFront {
+		// it was in front: if the app didn't hide or swap it, put it away
+		v, _, _ := pIsWindowVisible.Call(f.front)
+		mi, _, _ := pIsIconic.Call(f.front)
+		if fg == f.front && v != 0 && mi == 0 {
+			pShowWindowAsync.Call(f.front, SW_MINIMIZE)
+		}
+		done()
+		return
+	}
+	if normPath(windowExe(fg)) == f.exe {
+		done() // it opened in front by itself
+		return
+	}
+	for _, w := range listAppWindows() { // topmost first
+		if w.Exe == f.exe {
+			forceForeground(w.Hwnd)
+			done()
+			return
+		}
+	}
+	if step >= 1 {
+		done() // no window: the app shows something of its own (a flyout or a menu)
+	}
 }

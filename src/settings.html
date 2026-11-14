@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <style>
-  :root {
+  :root { --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
     --panel: #202020; --footer: rgba(0,0,0,.18);
     --tile: rgba(255,255,255,.06); --tile-hover: rgba(255,255,255,.09); --tile-border: rgba(255,255,255,.07);
-    --text: #ffffff; --dim: rgba(255,255,255,.62); --track: rgba(255,255,255,.55);
+    --text: #ffffff; --dim: rgba(255,255,255,.72); --track: rgba(255,255,255,.55);
     --thumb-ring: #454545; --accent: #60cdff; --on-accent: #000; --divider: rgba(255,255,255,.08);
     --field: rgba(255,255,255,.06); --field-line: rgba(255,255,255,.55);
     --sb-thin: rgba(255,255,255,.45); --sb-thumb: rgba(255,255,255,.55); --sb-hover: rgba(255,255,255,.68); --sb-active: rgba(255,255,255,.8);
@@ -17,7 +17,7 @@
   .light {
     --panel: #f3f3f3; --footer: rgba(0,0,0,.035);
     --tile: rgba(255,255,255,.72); --tile-hover: rgba(249,249,249,.6); --tile-border: rgba(0,0,0,.07);
-    --text: #1b1b1b; --dim: rgba(0,0,0,.6); --track: rgba(0,0,0,.45);
+    --text: #1b1b1b; --dim: rgba(0,0,0,.66); --track: rgba(0,0,0,.45);
     --thumb-ring: #ffffff; --accent: #005fb8; --on-accent: #fff; --divider: rgba(0,0,0,.07);
     --field: rgba(255,255,255,.7); --field-line: rgba(0,0,0,.45);
     --sb-thin: rgba(0,0,0,.4); --sb-thumb: rgba(0,0,0,.45); --sb-hover: rgba(0,0,0,.58); --sb-active: rgba(0,0,0,.7);
@@ -29,56 +29,61 @@
   .acrylic.light { --panel: rgba(243,243,243,.78); }
   * { box-sizing: border-box; }
   html, body { margin: 0; overflow: hidden; background: transparent; user-select: none; }
-  body { font: 12px/16px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--text); cursor: default; }
+  body { font: 12px/16px var(--font); color: var(--text); cursor: default; }
   #panel { background: var(--panel); display: flex; flex-direction: column; }
+  /* the quick panel's edge, like Windows 11's own hairline (the window itself is cut to 8 px corners) */
+  html:not(.windowed) #panel { border-radius: 8px; overflow: hidden; position: relative; }
+  html:not(.windowed) #panel::after { content: ''; position: absolute; inset: 0; border-radius: 8px; pointer-events: none; z-index: 50;
+    box-shadow: inset 0 0 0 1px var(--panel-edge, rgba(255,255,255,.1)); }
+  html.light:not(.windowed) #panel { --panel-edge: rgba(0,0,0,.12); }
   .body { padding: 20px 20px 14px; }
   .anim { animation: slide .25s cubic-bezier(.1,.9,.2,1); }
   .anim-back { animation: slideBack .25s cubic-bezier(.1,.9,.2,1); }
   @keyframes slide { from { transform: translateX(28px); opacity: 0; } }
   @keyframes slideBack { from { transform: translateX(-28px); opacity: 0; } }
 
-  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); column-gap: 12px; row-gap: 12px; }
-  .tile { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
-  .tile button { width: 100%; height: 48px; border-radius: 5px; border: 1px solid var(--tile-border); background: var(--tile);
-    color: var(--text); display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0; cursor: default; font: inherit;
-    transition: background-color .167s cubic-bezier(0,0,0,1), color .167s, border-color .167s, transform .083s cubic-bezier(0,0,0,1); }
-  .tile button:hover { background: var(--tile-hover); }
-  .tile button:active { transform: scale(.96); }
-  .tile.on button { background: var(--accent); border-color: transparent; color: var(--on-accent); }
-  .tile.on button:hover { filter: brightness(1.08); }
-  .tile svg { width: 16px; height: 16px; flex: none; }
-  .tile svg.chev { width: 11px; height: 11px; }
-  .tile .lbl { font-size: 12px; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
   .sliders { display: flex; flex-direction: column; gap: 0; padding: 4px 14px; }
+  #sliderParking { display: none; }
+  .slider-reset { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 34px; margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--divider); color: var(--dim); font-size: 11px; }
+  .slider-reset button { border: 1px solid var(--tile-border); border-radius: 5px; padding: 4px 10px; background: transparent; color: var(--text); font: inherit; cursor: default; }
+  .slider-reset button:hover { background: var(--tile-hover); }
   /* settings list (Windows 11 Settings style): grouped cards of rows with switches */
-  .body { max-height: 640px; overflow-y: auto; }
+  .body { max-height: 560px; overflow-y: auto; }
   /* Windows 11 overlay-style scroll bar: hidden at rest, a thin line while you scroll or move,
      and a wider thumb with arrows when the pointer is near it */
-  .body::-webkit-scrollbar, .scroll::-webkit-scrollbar { width: 12px; background: transparent; }
-  .body::-webkit-scrollbar-track, .scroll::-webkit-scrollbar-track { background: transparent; }
-  .body::-webkit-scrollbar-thumb, .scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 6px;
+  .body::-webkit-scrollbar, .scroll::-webkit-scrollbar, #page::-webkit-scrollbar { width: 12px; background: transparent; }
+  .body::-webkit-scrollbar-track, .scroll::-webkit-scrollbar-track, #page::-webkit-scrollbar-track { background: transparent; }
+  .body::-webkit-scrollbar-thumb, .scroll::-webkit-scrollbar-thumb, #page::-webkit-scrollbar-thumb { background: transparent; border-radius: 6px;
     border: solid transparent; border-width: 0 5px; background-clip: padding-box; min-height: 32px; }
   .sba::-webkit-scrollbar-thumb { background-color: var(--sb-thin); }
   .sbx::-webkit-scrollbar-thumb { background-color: var(--sb-thumb); border-width: 0 3px; }
   .sbx::-webkit-scrollbar-thumb:hover { background-color: var(--sb-hover); }
   .sbx::-webkit-scrollbar-thumb:active { background-color: var(--sb-active); }
   .sbx::-webkit-scrollbar-track { background: var(--sb-track); border-radius: 6px; }
-  .body::-webkit-scrollbar-button:single-button, .scroll::-webkit-scrollbar-button:single-button { height: 12px; background: no-repeat center / 8px 8px; }
+  .body::-webkit-scrollbar-button:single-button, .scroll::-webkit-scrollbar-button:single-button, #page::-webkit-scrollbar-button:single-button { height: 12px; background: no-repeat center / 8px 8px; }
   .sbx::-webkit-scrollbar-button:single-button:vertical:decrement { background-image: var(--sb-up); }
   .sbx::-webkit-scrollbar-button:single-button:vertical:increment { background-image: var(--sb-down); }
   .card { background: var(--tile); border: 1px solid var(--tile-border); border-radius: 7px; }
   .sec { font-size: 12px; font-weight: 600; color: var(--dim); margin: 16px 2px 6px; }
-  .lrow { display: flex; align-items: center; gap: 14px; min-height: 44px; padding: 0 14px; cursor: default;
+  .lrow { display: flex; align-items: center; gap: 14px; min-height: 48px; padding: 8px 14px; cursor: default;
     transition: background-color .12s; }
   .lrow + .lrow { border-top: 1px solid var(--divider); }
   .lrow:hover { background: var(--tile-hover); }
   .lrow:first-child { border-radius: 6px 6px 0 0; } .lrow:last-child { border-radius: 0 0 6px 6px; }
   .lrow:only-child { border-radius: 6px; }
+  button.category-row { width: 100%; border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: default; }
+  button.category-row:hover { background: var(--tile-hover); }
+  .category-row .t { gap: 2px; }
   .lrow svg.ic { width: 16px; height: 16px; flex: none; }
   .lrow .t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-  .lrow .t small { font-size: 11px; color: var(--dim); line-height: 14px; }
+  .lrow .t { gap: 2px; line-height: 17px; }
+  .lrow .t small { font-size: 11.5px; color: var(--dim); line-height: 15px; }
+  .lrow .v { flex: none; white-space: nowrap; }
+  .lrow .sw { margin-left: 4px; }
   .lrow .v { color: var(--dim); display: flex; align-items: center; gap: 6px; }
+  .lrow.disabled { opacity: .48; }
+  .card.dim { opacity: .5; }
+  .lrow.disabled:hover { background: transparent; }
   .lrow .v svg { width: 11px; height: 11px; }
   .sw { position: relative; width: 40px; height: 20px; flex: none; border-radius: 10px; border: 1px solid var(--track);
     transition: background-color .15s, border-color .15s; }
@@ -88,7 +93,13 @@
   .sw.on { background: var(--accent); border-color: var(--accent); }
   .sw.on::after { transform: translateX(20px); background: var(--on-accent); }
   .lrow:active .sw.on::after { transform: translateX(17px); }
-  .srow { display: flex; align-items: center; gap: 14px; height: 36px; }
+  .srow { display: flex; align-items: center; gap: 12px; height: 40px; }
+  .srow .slabel { flex: none; width: 92px; color: var(--text); font-size: 12px; white-space: nowrap; }
+  .srow .unit { flex: none; width: 18px; margin-left: -10px; color: var(--dim); font-size: 11px; }
+  .slider-help { margin: -6px 0 6px 104px; color: var(--dim); font-size: 11px; display: flex; justify-content: space-between; padding-right: 66px; position: relative; }
+  .slider-help .mid { position: absolute; left: calc((100% - 66px) * 4 / 9); transform: translateX(-50%); }
+  .alpha-label { flex: none; min-width: 42px; color: var(--text); }
+  .alpha-help { margin: -2px 10px 6px 10px; color: var(--dim); font-size: 11px; }
   .srow svg { width: 16px; height: 16px; flex: none; }
   .srow .val { width: 40px; text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; flex: none;
     font: inherit; font-size: 12px; background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 2px 4px;
@@ -96,6 +107,18 @@
   /* the number next to a slider: click it and type a value */
   .srow .val:hover { background: var(--field); color: var(--text); }
   .srow .val:focus { background: var(--field); color: var(--text); border-color: var(--tile-border); border-bottom: 2px solid var(--accent); text-align: center; }
+  .pack-scale-row { gap: 12px; }
+  .pack-scale-row .alpha-label { min-width: 70px; }
+  .pack-scale-row input[type=range] { min-width: 0; flex: 1; }
+  .pack-scale-value { display:flex; align-items:center; justify-content:flex-end; gap:3px; flex:none; min-width:60px; color:var(--dim); font-variant-numeric:tabular-nums; }
+  .pack-scale-value .val { width:38px; }
+  .pack-scale-value span { font-size:12px; }
+  .pack-art { display:flex; align-items:center; gap:12px; min-width:0; padding:14px; }
+  .pack-art img { width:44px; height:44px; object-fit:contain; border-radius:12px; background:var(--tile-hover); flex:none; }
+  .pack-art .t { min-width:0; flex:1; }
+  .pack-art .t small { display:block; color:var(--dim); margin-top:3px; line-height:1.35; }
+  .pack-art-actions { display:flex; flex-wrap:wrap; gap:8px; padding:0 14px 14px; }
+  .pack-art-actions .pill { white-space:nowrap; }
   input[type=range] { -webkit-appearance: none; appearance: none; flex: 1; height: 20px; background: transparent; margin: 0; }
   input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px;
     background: linear-gradient(to right, var(--accent) var(--p, 50%), var(--track) var(--p, 50%)); }
@@ -115,10 +138,10 @@
   .brand .ver { color: var(--dim); margin-left: 4px; }
   /* sub-pages */
   #page { display: none; padding: 12px 12px 10px; }
-  .paged #page { display: block; }
+  .paged #page { display: block; max-height: 560px; overflow-y: auto; overscroll-behavior: contain; }
   .paged .body { display: none; }
   .phead { display: flex; align-items: center; gap: 6px; height: 36px; margin-bottom: 6px; }
-  .phead h3 { margin: 0; font: 600 14px/20px "Segoe UI Variable Display", "Segoe UI", sans-serif; }
+  .phead h3 { margin: 0; font: 600 14px/20px var(--font); }
   .list { display: flex; flex-direction: column; gap: 2px; }
   .scroll { max-height: 330px; overflow-y: auto; padding-right: 2px; }
   .item { display: flex; align-items: center; gap: 12px; min-height: 36px; padding: 0 10px; border-radius: 5px; border: 0;
@@ -126,16 +149,226 @@
   .item:hover { background: var(--tile-hover); }
   .item.sel { background: var(--tile); }
   .item.sel::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 2px; background: var(--accent); }
+  .shape-options { display: flex; flex-direction: column; gap: 5px; }
+  .shape-option { min-height: 54px; display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 7px;
+    border: 1px solid var(--tile-border); background: var(--field); color: var(--text); font: inherit; text-align: left; cursor: default; }
+  .shape-option:hover { background: var(--tile-hover); }
+  .shape-option.sel { background: var(--tile); border-color: var(--accent); }
+  .shape-name { width: 88px; flex: none; font-size: 12px; font-weight: 600; }
+  .shape-preview { display: flex; align-items: center; justify-content: center; gap: 5px; height: 28px; flex: 1; }
+  .shape-preview span { height: 24px; background: var(--text); opacity: .76; flex: 1.5; border-radius: 8px; }
+  .shape-preview span:nth-child(2) { flex: .8; }
+  .shape-preview span:nth-child(3) { flex: 1.15; }
+  .shape-preview.round span { border-radius: 999px; }
+  .shape-option.sel .shape-preview span { opacity: .9; }
+  .shape-option .check { width: 18px; flex: none; color: var(--accent); visibility: hidden; }
+  .shape-option.sel .check { visibility: visible; }
+  /* All settings in its own window */
+  .windowed, .windowed body { height: 100%; }
+  .windowed.full #panel { height: 100vh; grid-template-rows: 1fr; }
+  .windowed.full footer { display: none; }
+  .windowed .sback { display: none; }
+  /* Settings › Colours */
+  .cpv { height: 74px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin: 6px 0 2px;
+    background: linear-gradient(135deg, #3d5a80 0%, #98c1d9 45%, #ee6c4d 100%); }
+  .cpv-dock { display: flex; gap: 7px; padding: 7px 11px; border-radius: 12px; box-shadow: 0 0 0 1px rgba(255,255,255,.14), 0 6px 16px rgba(0,0,0,.25); }
+  .cpv-dock span { width: 26px; height: 26px; border-radius: 7px; }
+  .cpv-dock b { height: 26px; padding: 0 8px; border-radius: 7px; display: flex; flex-direction: column; justify-content: center; align-items: center;
+    font: 600 10px/1.05 inherit; }
+  .cpv-dock b small { font-weight: 400; font-size: 7px; opacity: .7; }
+  .cpv-dock i { width: 4px; height: 4px; border-radius: 50%; align-self: flex-end; margin: 0 -9px -4px -13px; }
+  .cs-row { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; padding: 12px 14px; }
+  /* the fill sits on its own layer clipped to an exact circle, so gradients can't show
+     flat edges or a light sliver at fractional display scales; rings are drawn on top */
+  .cs { -webkit-appearance: none; appearance: none; width: 28px; height: 28px; border-radius: 50%; border: 0; padding: 0; background: transparent;
+    cursor: default; position: relative; display: inline-block; flex: none; transition: transform .12s; }
+  .cs::before { content: ''; position: absolute; inset: 0; border-radius: 50%; clip-path: circle(50% at 50% 50%); background: var(--bg, var(--c)); }
+  .cs::after { content: ''; position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--tile-border); pointer-events: none; }
+  .cs:hover { transform: scale(1.08); }
+  .cs.sel { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
+  .cs.def { --bg: linear-gradient(135deg, #1d1f24 50%, #eceef3 50%); }
+  .cs.rain { --bg: conic-gradient(#f44, #fd4, #4f6, #4df, #46f, #f4f, #f44); }
+  .cs input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: default; z-index: 1; border-radius: 50%; }
+  .cs-name { color: var(--dim); font-size: 11px; margin-left: 2px; }
+  .cs-wall { border-top: 1px solid var(--divider); }
+  .cs-label { color: var(--dim); font-size: 11px; width: 100%; margin-bottom: -3px; display: flex; align-items: center; gap: 6px; }
+  .cs.wp { --bg: var(--wp, conic-gradient(#888, #bbb, #888)); }
+
+  .cs-sep { width: 1px; height: 22px; background: var(--divider); margin: 0 2px; }
+  .strength { padding: 12px 14px 10px; }
+  .strength input[type=range] { width: 100%; }
+  .strength input[type=range]::-webkit-slider-runnable-track { height: 10px; border-radius: 5px; background: var(--sg), repeating-conic-gradient(rgba(128,128,128,.28) 0 25%, transparent 0 50%) 0 0 / 8px 8px; box-shadow: inset 0 0 0 1px var(--tile-border); }
+  .strength input[type=range]::-webkit-slider-thumb { margin-top: -5px; }
+  .strength .ends { display: flex; justify-content: space-between; color: var(--dim); font-size: 11px; margin-top: 4px; }
+  .hint { color: var(--dim); font-size: 11px; padding: 0 14px 12px; }
+  .seg.two { grid-template-columns: repeat(2, 1fr); }
+  .seg.three { grid-template-columns: repeat(3, 1fr); }
+  /* "The dock is locked" banner on the dock items page */
+  .lockbar { display: flex; align-items: center; gap: 10px; padding: 9px 12px; margin: 0 0 8px; border-radius: 7px; background: var(--tile);
+    border: 1px solid var(--tile-border); font-size: 12.5px; }
+  .lockbar svg { width: 16px; height: 16px; flex: none; color: var(--dim); }
+  .lockbar span { flex: 1; min-width: 0; }
+  .lockbar .pill { flex: none; }
+  .pack-lock { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; color: var(--dim); }
+  .pack-lock svg { width: 14px; height: 14px; }
+  .wsp { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 54px; height: 54px; border-radius: 12px;
+    background: var(--tile); box-shadow: inset 0 0 0 1px var(--tile-border); margin: 2px auto 6px; position: relative; }
+  .wsp b { font: 600 14px/1.1 inherit; } .wsp small { font-size: 8px; color: var(--dim); }
+  .wsp svg { color: var(--text); }
+  .wsel { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 14px 0; }
+  .wsel button { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 11px; border-radius: 14px; border: 1px solid var(--tile-border);
+    background: transparent; color: var(--text); font: inherit; font-size: 12px; cursor: default; }
+  .wsel button:hover { background: var(--tile-hover); }
+  .wsel button.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  .wsel i { width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--tile-border); }
+  .wsel b { font-weight: 400; color: var(--dim); font-size: 11px; }
+  /* Weather settings */
+  .wx-status { display: flex; align-items: center; gap: 10px; padding: 12px 14px; font-size: 12.5px; line-height: 1.4; }
+  .wx-status span { flex: 1; }
+  .wx-status button { flex: none; }
+  .wx-form { padding: 12px 14px; display: grid; gap: 10px; }
+  .wx-form label { display: grid; gap: 4px; font-size: 12px; color: var(--dim); }
+  .wx-form label small { font-size: 11px; }
+  .wx-form input { height: 32px; border-radius: 5px; border: 1px solid var(--tile-border); background: var(--input, rgba(255,255,255,.06)); color: var(--text);
+    font: inherit; font-size: 13px; padding: 0 10px; outline: none; }
+  .wx-form input:focus { border-color: var(--accent); box-shadow: inset 0 -1px 0 var(--accent); }
+  .wx-form .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .wx-form .acts { display: flex; align-items: center; gap: 12px; }
+  .wx-save { height: 32px; padding: 0 16px; border-radius: 5px; border: 0; background: var(--accent); color: var(--on-accent, #000); font: inherit; font-size: 13px; font-weight: 600; cursor: default; }
+  .wx-save:disabled { opacity: .55; }
+  .wx-msg { font-size: 12px; color: var(--dim); }
+  .wx-msg.ok { color: var(--ok, #6ccb5f); } .wx-msg.err { color: var(--bad, #ff6b6b); }
+  .light .wx-form input { background: rgba(255,255,255,.7); }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .seg-opt { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 8px 6px 9px; border-radius: 7px;
+    border: 1px solid var(--tile-border); background: var(--field); color: var(--text); font: inherit; font-size: 12px; cursor: default; }
+  .seg-opt:hover { background: var(--tile-hover); }
+  .lp-seg { grid-template-columns: repeat(2, 1fr); }
+  .lp-side { position: relative; width: 100%; height: 58px; border-radius: 5px; border: 1px solid var(--tile-border); background: #2d2840; overflow: hidden; display: block; }
+  .light .lp-side { background: #d9d5ee; }
+  .lp-side b { position: absolute; left: 8px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.45); }
+  .lp-side.text b { width: 34%; } .lp-side.icons b { width: 7px; height: 7px; border-radius: 2px; }
+  .lp-side b:nth-child(1) { top: 9px; background: #4cc2ff; } .lp-side b:nth-child(2) { top: 20px; } .lp-side b:nth-child(3) { top: 31px; } .lp-side b:nth-child(4) { top: 42px; }
+  .lp-side i { position: absolute; width: 11px; height: 11px; border-radius: 3px; background: rgba(255,255,255,.85); }
+  .lp-side.text i:nth-child(5) { left: 52%; top: 12px; } .lp-side.text i:nth-child(6) { left: 68%; top: 12px; } .lp-side.text i:nth-child(7) { left: 84%; top: 12px; }
+  .lp-side.text i:nth-child(8) { left: 52%; top: 32px; } .lp-side.text i:nth-child(9) { left: 68%; top: 32px; } .lp-side.text i:nth-child(10) { left: 84%; top: 32px; }
+  .lp-side.icons i:nth-child(5) { left: 30%; top: 12px; } .lp-side.icons i:nth-child(6) { left: 48%; top: 12px; } .lp-side.icons i:nth-child(7) { left: 66%; top: 12px; }
+  .lp-side.icons i:nth-child(8) { left: 30%; top: 32px; } .lp-side.icons i:nth-child(9) { left: 48%; top: 32px; } .lp-side.icons i:nth-child(10) { left: 66%; top: 32px; }
+  .lp-prev { margin: 4px 12px 10px; padding: 10px 4px 6px; border-radius: 7px; background: #2d2840; overflow: hidden; }
+  .light .lp-prev { background: #d9d5ee; }
+  .lp-prev-grid { display: grid; justify-content: center; row-gap: 6px; }
+  .lp-prev-grid span { display: block; margin: 0 auto; border-radius: 22%; }
+  .lp-prev-cap { text-align: center; font-size: 11px; color: rgba(255,255,255,.7); margin-top: 6px; }
+  .light .lp-prev-cap { color: rgba(0,0,0,.55); }
+  .seg-opt small { font-size: 11px; margin-top: -4px; }
+  .seg-opt.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; background: var(--tile); }
+  .swatch { position: relative; width: 100%; height: 40px; border-radius: 5px; overflow: hidden; border: 1px solid var(--tile-border);
+    background-origin: border-box !important; background-repeat: no-repeat !important; }
+  .swatch.light { background: #eceef3; } .swatch.dark { background: #1d1f24; }
+  .swatch.auto { background: linear-gradient(90deg, #eceef3 50%, #1d1f24 50%); }
+  .swatch span { position: absolute; left: 18%; right: 18%; bottom: 6px; height: 10px; border-radius: 4px; }
+  .swatch.light span { background: rgba(255,255,255,.95); box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+  .swatch.dark span { background: #3a3d44; }
+  .swatch.auto span { background: linear-gradient(90deg, #fff 50%, #3a3d44 50%); box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+  .home-lock { margin-top: 10px; }
+  /* quick panel (what opens first) */
+  .qgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .qt { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-height: 64px; padding: 10px 10px 9px; border-radius: 7px;
+    border: 1px solid var(--tile-border); background: var(--tile); color: var(--text); font: inherit; font-size: 12px; text-align: left; cursor: default; }
+  .qt:hover { background: var(--tile-hover); }
+  .qt.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .qt svg.ic { width: 16px; height: 16px; }
+  .qseg { display: grid; gap: 4px; padding: 3px; border-radius: 7px; background: var(--field); border: 1px solid var(--tile-border); }
+  .qseg button { border: 0; border-radius: 5px; padding: 6px 0; background: transparent; color: var(--text); font: inherit; font-size: 12px; cursor: default; }
+  .qseg button:hover { background: var(--tile-hover); }
+  .qseg button.sel { background: var(--tile-hover); box-shadow: inset 0 0 0 1px var(--accent); font-weight: 600; }
+  .qsl { padding: 2px 12px; }
+  .qtop { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .qtop .search { flex: 1; margin: 0; }
+  .refresh { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid var(--tile-border); border-radius: 5px;
+    background: var(--field); color: var(--text); cursor: default; }
+  .refresh:hover { background: var(--tile-hover); }
+  .refresh svg { width: 15px; height: 15px; }
+  .refresh.spin svg { animation: spin .6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #side .stop { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
+  #side .stop .sback { flex: 1; margin: 0; }
+  #side .stop .grow { flex: 1; }
+  #side .stop .refresh { width: 30px; height: 30px; }
+  .rst { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 5px; background: transparent; color: var(--dim); cursor: default; }
+  .rst:hover { background: var(--tile-hover); color: var(--text); }
+  .rst svg { width: 14px; height: 14px; }
+  .rst-pad { flex: none; width: 26px; }
+  .qsl .srow { height: 36px; }
+  .qsl .srow svg { opacity: .85; }
+  .qall { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 12px; padding: 10px 14px; border-radius: 7px;
+    border: 1px solid var(--tile-border); background: var(--tile); color: var(--text); font: inherit; font-size: 12.5px; cursor: default; }
+  .qall:hover { background: var(--tile-hover); }
+  .qall small { color: var(--dim); font-size: 11.5px; }
+  /* all settings: a side panel of sections, like Launchpad */
+  #side { display: none; }
+  .full #panel { display: grid; grid-template-columns: 196px 1fr; grid-template-rows: 1fr auto; height: 600px; }
+  .full .body { display: none; }
+  .full #side { display: flex; flex-direction: column; gap: 2px; padding: 12px 8px 10px 12px; min-height: 0; }
+  .full #page { display: block; grid-column: 2; max-height: none; height: 100%; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px 18px 12px 10px; }
+  .full footer { grid-column: 1 / -1; }
+  #side .sback { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; margin-bottom: 4px; border: 0; border-radius: 5px; background: transparent;
+    color: var(--dim); font: inherit; font-size: 12px; cursor: default; }
+  #side .sback:hover { background: var(--tile-hover); color: var(--text); }
+  #side .sback svg { width: 14px; height: 14px; }
+  #side .search { margin: 0 0 8px; }
+  #side .si { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border: 0; border-radius: 5px; background: transparent;
+    color: var(--text); font: inherit; font-size: 12.5px; text-align: left; position: relative; cursor: default; }
+  #side .si:hover { background: var(--tile-hover); }
+  #side .si.on { background: var(--tile-hover); font-weight: 600; }
+  #side .si.on::before { content: ""; position: absolute; left: 0; top: 9px; bottom: 9px; width: 3px; border-radius: 2px; background: var(--accent); }
+  #side .si svg { width: 16px; height: 16px; flex: none; }
+  #side .search svg { width: 14px; height: 14px; flex: none; }
+  .qall svg { width: 12px; height: 12px; flex: none; opacity: .7; }
+  .qall span { text-align: left; line-height: 18px; }
+  #side .grow { flex: 1; }
+  #side .dv { height: 1px; background: var(--divider); margin: 4px 4px; }
+  .full .phead.top { margin-bottom: 2px; }
+  .full .phead.top h3 { font-size: 18px; line-height: 26px; padding-left: 2px; }
+  .full #page > .sec:first-of-type, .full .phead + .sec { margin-top: 8px; }
+  .radio { width: 18px; height: 18px; flex: none; border-radius: 50%; border: 1px solid var(--track); position: relative; }
+  .radio.on { border: 5px solid var(--accent); }
+  .radio.on::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--on-accent); transform: scale(.55); opacity: 0; }
+  .lrow .t .tl { display: flex; align-items: center; }
+  .sec-row { display: flex; align-items: center; justify-content: space-between; }
+  .sec-row .pill { padding: 2px 10px; font-size: 11.5px; font-weight: 400; }
+  .tag { display: inline-block; flex: none; margin-left: 6px; padding: 0 6px; border-radius: 4px; font-size: 10.5px; line-height: 16px; font-weight: 600;
+    background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); vertical-align: 1px; }
+  .pack-art .glyph { width: 44px; height: 44px; flex: none; border-radius: 12px; background: var(--tile-hover); display: grid; place-items: center; }
+  .pack-art .glyph svg { width: 24px; height: 24px; }
+  .pack-row { display: flex; align-items: center; gap: 4px; }
+  .pack-row .item { flex: 1; min-width: 0; }
+  .pack-row .remove-pack { width: 30px; height: 30px; color: var(--dim); }
+  .pack-row .remove-pack:hover { color: #ff6b68; background: var(--tile-hover); }
+  .pack-scale { margin-top: 14px; }
+  .confirm-layer { position: fixed; inset: 0; z-index: 2000; display: none; align-items: center; justify-content: center; padding: 16px;
+    background: rgba(0,0,0,.42); }
+  .confirm-layer.show { display: flex; }
+  .confirm-dialog { width: min(340px, 100%); padding: 18px; border-radius: 10px; border: 1px solid var(--tile-border); background: var(--panel);
+    color: var(--text); box-shadow: 0 14px 40px rgba(0,0,0,.32); }
+  .confirm-dialog h3 { margin: 0 0 7px; font: 600 14px/20px var(--font); }
+  .confirm-dialog p { margin: 0; color: var(--dim); line-height: 18px; overflow-wrap: anywhere; }
+  .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .confirm-actions button { min-width: 72px; height: 30px; padding: 0 12px; border-radius: 5px; border: 1px solid var(--tile-border);
+    background: var(--field); color: var(--text); font: inherit; cursor: default; }
+  .confirm-actions button:hover { background: var(--tile-hover); }
+  .confirm-actions .danger { border-color: transparent; background: #d94b48; color: #fff; }
+  .confirm-actions .danger:hover { background: #e45a57; }
   .item img { width: 24px; height: 24px; flex: none; }
   /* Edit Dock: position numbers, page headings, drag to reorder */
   .item .num { width: 24px; height: 22px; flex: none; margin-right: -4px; border: 0; border-radius: 5px; background: transparent;
-    color: var(--dim); font: 600 11px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; display: grid; place-items: center; cursor: default; }
+    color: var(--dim); font: 600 11px var(--font); font-variant-numeric: tabular-nums; display: grid; place-items: center; cursor: default; }
   .item button.num:hover { background: var(--tile-hover); color: var(--text); }
   .item .num.fixed svg { width: 12px; height: 12px; opacity: .55; }
   .numin { width: 38px; height: 24px; margin-right: -4px; border: 1px solid var(--accent); border-radius: 5px; background: var(--field);
-    color: var(--text); font: 600 11px "Segoe UI", sans-serif; text-align: center; outline: 0; }
+    color: var(--text); font: 600 11px var(--font); text-align: center; outline: 0; }
   .numin::-webkit-inner-spin-button { display: none; }
-  .ghead { padding: 10px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: .02em; color: var(--dim); text-transform: uppercase; }
+  .ghead { padding: 12px 10px 4px; font-size: 12px; font-weight: 600; color: var(--dim); }
   .ghead:first-child { padding-top: 2px; }
   .item .grip { width: 20px; height: 28px; display: grid; place-items: center; color: var(--dim); cursor: grab; touch-action: none; }
   .item .grip svg { width: 14px; height: 14px; }
@@ -148,11 +381,46 @@
   .item.flash { animation: flash .6s ease-out; }
   @keyframes flash { from { background: color-mix(in srgb, var(--accent) 30%, transparent); } }
   .item .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .item .sub { margin-left: auto; color: var(--dim); font-size: 12px; }
   .item .acts { display: flex; gap: 2px; margin-left: auto; }
-  .pill { border: 0; border-radius: 4px; padding: 4px 10px; font: inherit; font-size: 12px; cursor: default; background: var(--accent); color: var(--on-accent); }
-  .pill.off { background: transparent; color: var(--dim); }
-  .pfoot { margin-top: 8px; padding: 8px 10px 0; border-top: 1px solid var(--divider); display: flex; gap: 16px; flex-wrap: wrap; }
+  .position-btn { height: 28px; min-width: 96px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 0 9px; border: 1px solid var(--divider); border-radius: 5px; background: var(--field); color: var(--text); font: 11px var(--font); cursor: default; }
+  .position-btn:hover { background: var(--tile-hover); }
+  .position-btn { min-width: 82px; }
+  .position-btn:disabled { opacity: .4; }
+  .item .n.dim { color: var(--dim); }
+  .reorder { display: flex; flex-direction: column; flex: none; margin-right: -4px; }
+  .reorder button { width: 22px; height: 15px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 3px;
+    background: transparent; color: var(--dim); cursor: default; }
+  .reorder button:hover:not(:disabled) { background: var(--tile-hover); color: var(--text); }
+  .reorder button:disabled { opacity: .25; }
+  .reorder svg { width: 12px; height: 12px; }
+  .sw-btn { padding: 4px 2px; border: 0; background: transparent; cursor: default; display: grid; place-items: center; }
+  .sw-btn:hover .sw:not(.on) { border-color: var(--text); }
+  .position-btn .chev { color: var(--dim); font-size: 14px; line-height: 1; }
+  .position-menu { position: fixed; z-index: 1000; min-width: 112px; padding: 4px; border: 1px solid var(--tile-border); border-radius: 6px;
+    background: #252525; color: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+  .light .position-menu { background: #f3f3f3; color: #1b1b1b; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+  .position-menu button { display: block; width: 100%; min-height: 30px; padding: 4px 9px; border: 0; border-radius: 4px;
+    background: transparent; color: inherit; font: 12px var(--font); text-align: left; cursor: default; }
+  .position-menu button:hover, .position-menu button[aria-selected="true"] { background: var(--tile-hover); }
+  .item .acts button:disabled { opacity: .35; }
+  /* buttons: .pill is the quiet secondary button; .pill.primary is the one main action */
+  .pill { border: 1px solid var(--tile-border); border-radius: 5px; padding: 5px 12px; font: inherit; font-size: 12px; cursor: default;
+    background: var(--field); color: var(--text); transition: background-color .1s; }
+  .pill:hover { background: var(--tile-hover); }
+  .pill:disabled { opacity: .35; pointer-events: none; }
+  /* a position number you can type into */
+  input.pos { flex: none; width: 34px; height: 28px; margin-right: 4px; text-align: center; font: 600 13px var(--font); color: var(--text);
+    background: var(--field); border: 1px solid var(--tile-border); border-bottom-color: var(--field-line); border-radius: 5px; outline: none; cursor: text; }
+  input.pos:hover { background: var(--tile-hover); }
+  input.pos:focus { border-bottom: 2px solid var(--accent); }
+  .pill.primary { border-color: transparent; background: var(--accent); color: var(--on-accent); }
+  .pill.primary:hover { filter: brightness(1.08); }
+  .pill.off { background: transparent; border-color: transparent; color: var(--dim); }
+  .pill.off:hover { background: transparent; }
+  .pfoot { margin-top: 8px; padding: 10px 2px 0; border-top: 1px solid var(--divider); display: flex; gap: 6px 8px; flex-wrap: wrap; }
+  .pfoot .link { border: 1px solid var(--tile-border); border-radius: 5px; padding: 5px 10px; background: var(--field); color: var(--text); }
+  .pfoot .link:hover { text-decoration: none; background: var(--tile-hover); }
   .link { background: none; border: 0; color: var(--accent); font: inherit; font-size: 12px; padding: 4px 0; cursor: default; }
   .link:hover { text-decoration: underline; }
   .search { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; margin: 0 2px 8px; border-radius: 5px;
@@ -183,7 +451,7 @@
   .about .big .logo { width: 36px; height: 36px; border-radius: 9px; flex: none; background: linear-gradient(160deg, #ff9a6b, #8a5cf6); position: relative; }
   .about .big .logo::after { content: ""; position: absolute; background: rgba(255,255,255,.9); }
   .about .big .logo::after { left: 6px; right: 6px; bottom: 6px; height: 7px; border-radius: 3px; }
-  .about h4 { margin: 0; font: 600 15px/20px "Segoe UI Variable Display", "Segoe UI", sans-serif; }
+  .about h4 { margin: 0; font: 600 15px/20px var(--font); }
   .about .muted { color: var(--dim); font-size: 12px; }
   .about pre { margin: 0; max-height: 240px; overflow: auto; white-space: pre-wrap; font: 11px/16px "Cascadia Mono", Consolas, monospace; color: var(--dim); user-select: text; }
   .about .btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -195,6 +463,15 @@
   .icon-btn svg { width: 16px; height: 16px; }
   .icon-btn.sm { width: 28px; height: 28px; }
   .icon-btn.sm svg { width: 14px; height: 14px; }
+  .hgrid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; margin-top:6px; }
+  .hcard { display:flex; flex-direction:column; align-items:flex-start; gap:4px; text-align:left; padding:14px; border-radius:10px; border:1px solid var(--tile-border); background:var(--tile); color:inherit; font:inherit; cursor:pointer; }
+  .hcard:hover { background:var(--hover, rgba(127,127,127,.14)); }
+  .hcard .ic { width:22px; height:22px; color:var(--accent); margin-bottom:4px; }
+  .hcard b { font-weight:600; font-size:13.5px; }
+  .hcard small { color:var(--dim); font-size:11.5px; }
+  .fontpick { min-width:220px; max-width:280px; font:inherit; color:var(--text); background:var(--tile); border:1px solid var(--tile-border); border-radius:6px; padding:5px 8px; }
+  .fontpick option { background:#2b2b2b; color:#fff; font-size:13px; }
+  .light .fontpick option { background:#fff; color:#1a1a1a; }
 </style>
 </head>
 <body>
@@ -205,25 +482,39 @@
       <div class="ut"><b id="updTitle"></b><span>Settings and icon packs are kept</span></div>
       <button onclick="mdUpdate()">Update</button>
     </div>
-    <div class="card sliders">
-      <div class="srow" title="Icon size">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="5" height="5" rx="1.2"/><rect x="9" y="9" width="5" height="5" rx="1.2"/><path d="M9.5 2.5h4v4M13.5 2.5 9 7"/></svg>
-        <input type="range" id="size" min="32" max="96" step="1"><input class="val" id="sizeVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off">
+    <div class="qtop"><div class="search" id="settingsSearch"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="6" cy="6" r="4.4"/><path d="M9.4 9.4 13 13"/></svg><input id="settingsQuery" placeholder="Search settings" spellcheck="false" autocomplete="off"></div>
+      <button type="button" class="refresh" title="Refresh the dock: reload every icon and redraw it" aria-label="Refresh the dock" onclick="refreshDock(this)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.5-3.5M13 2.5v3h-3"/></svg></button></div>
+    <div id="tiles"></div>
+  </div>
+  <div id="sliderParking">
+    <div class="card sliders" id="layoutControls">
+      <div class="srow" title="Size of the app icons, in pixels">
+        <label class="slabel" for="size">Icon size</label>
+        <input type="range" id="size" min="32" max="96" step="1"><input class="val" id="sizeVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off" aria-label="Icon size in pixels"><span class="unit">px</span><span class="rst-pad"></span>
       </div>
-      <div class="srow" title="Apps per page">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="3" width="13" height="7" rx="2"/><circle cx="6" cy="13" r=".8" fill="currentColor"/><circle cx="10" cy="13" r=".8" fill="currentColor"/></svg>
-        <input type="range" id="per" min="4" max="21" step="1"><input class="val" id="perVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off">
+      <div class="srow" title="Extra space between app icons, in pixels">
+        <label class="slabel" for="padding">Icon spacing</label>
+        <input type="range" id="padding" min="0" max="20" step="1" aria-label="Icon spacing"><input class="val" id="paddingVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off" aria-label="Icon spacing in pixels"><span class="unit">px</span><button type="button" class="rst" title="Back to the default spacing" aria-label="Reset spacing" onclick="set('appPadding', 0)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 1 0 1.5-3.5M3 2.5v3h3"/></svg></button>
       </div>
-      <div class="srow" title="Animation speed (5 = normal, lower = slower)">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 11.5a5.5 5.5 0 1 1 11 0"/><path d="M8 11.5 11 6.5"/><circle cx="8" cy="11.5" r=".9" fill="currentColor"/></svg>
-        <input type="range" id="anim" min="1" max="5" step="1"><input class="val" id="animVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off">
+      <div class="srow" title="How many apps fit on one page of the dock before it adds another page">
+        <label class="slabel" for="per">Apps per page</label>
+        <input type="range" id="per" min="4" max="21" step="1"><input class="val" id="perVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off" aria-label="Apps per page"><span class="unit"></span><span class="rst-pad"></span>
+      </div>
+      <div id="animationControlRow">
+        <div class="srow" title="Animation speed (5 = normal, lower = slower)">
+          <label class="slabel" for="anim">Speed</label>
+          <input type="range" id="anim" min="1" max="10" step="1"><input class="val" id="animVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off" aria-label="Animation speed, 1 to 10"><span class="unit"></span>
+        </div>
+        <div class="slider-help"><span>Slower</span><span class="mid">5 · Normal</span><span>5× faster</span></div>
       </div>
       <div class="srow" title="Magnification" style="display:none">
         <input type="range" id="mag" min="100" max="250" step="1"><input class="val" id="magVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off">
       </div>
+      <div class="slider-reset"><span>Back to the default size and spacing</span><button type="button" onclick="resetMainSliders()">Reset</button></div>
     </div>
-    <div id="tiles"></div>
+    <div class="card sliders" id="behaviorControls"></div>
   </div>
+  <nav id="side" aria-label="Settings sections"></nav>
   <div id="page"></div>
   <footer>
     <button class="brand" title="About DG-Dock" onclick="openPage('about')"><div class="logo"></div><span>DG-Dock</span><span class="ver" id="ver"></span></button>
@@ -236,12 +527,36 @@
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="M8 2v5.5"/><path d="M4.6 4.2a5 5 0 1 0 6.8 0"/></svg></button>
     </div>
   </footer>
+  <div class="confirm-layer" id="confirmLayer" aria-hidden="true">
+    <div class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
+      <h3 id="confirmTitle">Remove icon pack?</h3>
+      <p id="confirmMessage"></p>
+      <div class="confirm-actions"><button type="button" onclick="answerConfirm(false)" id="confirmCancel">Cancel</button>
+        <button type="button" class="danger" onclick="answerConfirm(true)" id="confirmOk">Remove</button></div>
+    </div>
+  </div>
 </div>
 
 <script>
 let S = null, ENV = { dark: true, acrylic: false }, APPS = [], appIcons = {}, packIcons = {}, ITEMS = [];
-let page = null, pickIdx = -1, pickKey = '', pickName = '', pickPrefill = '';
+let FULL = false; // all settings (the wide window with the side panel) rather than the quick panel
+const WINDOWED = !!window.WINDOWED; // this page is the separate All settings window
+if (WINDOWED) document.documentElement.classList.add('windowed');
+// the sections of All settings, and which section each deeper page belongs to
+const NAV = [
+  ['home', 'tiles', 'Home'], ['colours', 'colours', 'Appearance'], ['icons', 'pack', 'Icons'], ['layout', 'pos', 'Dock'],
+  ['widgets', 'widgets', 'Widgets'], ['launchpad', 'launch', 'Launchpad'], ['system', 'displays', 'System'],
+];
+const OWNER = { weather: 'widgets', theme: 'colours', iconStyle: 'icons', position: 'layout', pillOrder: 'layout', pack: 'icons', dock: 'icons', animations: 'layout',
+  apps: 'icons', picker: 'icons', lpTabs: 'launchpad', lpIcons: 'launchpad' };
+// the old pages, before the tidy-up (Build 234): where each one lives now
+const MOVED = { look: 'colours', appearance: 'colours', appsIcons: 'layout', behaviour: 'layout' };
+const ownerOf = p => OWNER[p] || p;
+const isTop = p => p === 'about' || p === 'search' || NAV.some(n => n[0] === p);
+let page = null, appsReturnPage = 'icons', pickIdx = -1, pickKey = '', pickName = '', pickPrefill = '', pickReturnPage = '';
 const $ = id => document.getElementById(id);
+// Keep live controls parked here between category pages so their event handlers persist.
+$('behaviorControls').appendChild($('animationControlRow'));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 // imgAttr gives an <img> that shows a loading tile until its icon arrives.
@@ -249,7 +564,7 @@ function imgAttr(u) { return u ? `src="${u}"` : `src="${BLANK}" class="ph"`; }
 // Windows 11 scroll bars: a thin line shows while scrolling or moving over a list and fades
 // after a second; near the right edge it widens into a thumb with arrows.
 (() => {
-  const SB = '.body, .scroll';
+  const SB = '.body, .scroll, #page';
   const timers = new WeakMap();
   function wake(el, near) {
     el.classList.add('sba'); el.classList.toggle('sbx', near);
@@ -277,6 +592,7 @@ function setIcon(img, u) {
   img.onload = () => { img.classList.remove('ph', 'none'); img.classList.add('in'); img.onload = null; };
   img.src = u;
 }
+const CHECK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg>';
 const CHEV = '<svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg>';
 const BACK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8H3M7 4 3 8l4 4"/></svg>';
 const SRCH = '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="6" cy="6" r="4.4"/><path d="M9.4 9.4 13 13"/></svg>';
@@ -292,121 +608,430 @@ const I = {
   style: '<rect x="1.5" y="9.5" width="8" height="4" rx="2"/><rect x="10.5" y="9.5" width="4" height="4" rx="2"/><path d="M3 6.5h10"/>',
   pos: '<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><rect x="4" y="10.5" width="8" height="1.5" rx=".75" fill="currentColor"/>',
   pack: '<rect x="2" y="2" width="5" height="5" rx="1.5"/><rect x="9" y="2" width="5" height="5" rx="1.5"/><rect x="2" y="9" width="5" height="5" rx="1.5"/><rect x="9" y="9" width="5" height="5" rx="1.5"/>',
+  usb: '<rect x="5.5" y="1.5" width="5" height="4.5" rx=".8"/><rect x="4" y="6" width="8" height="8.5" rx="1.8"/><path d="M7.2 3.4v.6M8.8 3.4v.6"/>',
+  launch: '<circle cx="4" cy="4" r="1.6"/><circle cx="8" cy="4" r="1.6"/><circle cx="12" cy="4" r="1.6"/><circle cx="4" cy="8" r="1.6"/><circle cx="8" cy="8" r="1.6"/><circle cx="12" cy="8" r="1.6"/><circle cx="4" cy="12" r="1.6"/><circle cx="8" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/>',
+  brush: '<path d="M13.5 2.5 7 9"/><path d="M7 9c-1.6-.4-3 .6-3.2 2.3-.2 1.4-1 2-2.3 2.2 2.7 1 6 .3 6.2-2.6.1-.8-.2-1.5-.7-1.9Z"/>',
+  lock: '<rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>',
   theme: '<circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11A5.5 5.5 0 0 0 8 2.5Z" fill="currentColor"/>',
+  weather: '<circle cx="6" cy="6" r="2.2"/><path d="M6 1.8v.8M2.5 6h-.7M3.3 3.3l-.5-.5M8.7 3.3l.5-.5"/><path d="M5.5 13.5h6a2.4 2.4 0 0 0 .2-4.8 3.2 3.2 0 0 0-6.1.6 2.1 2.1 0 0 0-.1 4.2Z"/>',
+  colours: '<path d="M8 2.2a5.8 5.8 0 1 0 0 11.6c.9 0 1.3-.7 1.1-1.4-.3-1 .3-1.9 1.4-1.9h1.4a2.3 2.3 0 0 0 2.3-2.4C14 4.7 11.4 2.2 8 2.2Z"/><circle cx="5" cy="7" r=".8"/><circle cx="7.5" cy="4.8" r=".8"/><circle cx="10.5" cy="5.6" r=".8"/>',
   tiles: '<rect x="2.5" y="2.5" width="11" height="11" rx="3.5"/><circle cx="8" cy="8" r="2"/>',
   start: '<path d="M8 2v6.2"/><path d="M4.9 4.5a5 5 0 1 0 6.2 0"/>',
   reserve: '<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M1.5 10h13M8 4.5v3.5M6.3 6.3 8 8l1.7-1.7"/>',
+  bin: '<path d="M3 4.5h10l-.7 9H3.7zM2 4.5h12M6 2.5h4M6.5 7v4M9.5 7v4"/>',
   previews: '<rect x="1.5" y="3" width="6" height="5" rx="1"/><rect x="8.5" y="3" width="6" height="5" rx="1"/><rect x="5" y="10.5" width="6" height="3" rx="1.5"/>',
+  folder: '<path d="M1.5 4.5h5l1.5 1.7h6.5v6.3H1.5z"/><path d="M1.5 4.5V3.2h4l1.4 1.3"/>',
   tray: '<path d="M4.5 9.5 8 6l3.5 3.5"/><rect x="2" y="2.5" width="12" height="11" rx="2.5"/>',
   widgets: '<circle cx="5" cy="5.5" r="3"/><path d="M5 4v1.6l1 .8"/><rect x="9.5" y="3" width="5" height="5" rx="1.2"/><path d="M3 12.5h10"/>',
+  battery: '<rect x="1.5" y="4.5" width="11.5" height="7" rx="1.5"/><path d="M14.5 7v2"/><rect x="3.3" y="6.3" width="4.5" height="3.4" rx=".6" fill="currentColor"/>',
   displays: '<rect x="1" y="3" width="8" height="6" rx="1"/><rect x="7" y="6" width="8" height="6" rx="1"/>',
 };
 const svg = p => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 
 const NAMES = {
-  style: { pill: 'Pill', notch: 'Notch', glass: 'Glass' },
-  position: { bottom: 'Bottom', left: 'Left', right: 'Right' },
+  position: { bottom: 'Bottom', top: 'Top', left: 'Left', right: 'Right' },
   theme: { auto: 'Match Windows', light: 'Light', dark: 'Dark' },
-  iconStyle: { tiles: 'Rounded tiles', original: 'Original icons' },
+  dockShape: { default: 'Default', pill: 'Pill shape' },
+  iconStyle: { tiles: 'Rounded tiles', circle: 'Circle tile', original: 'Original tiles' },
 };
-const TOGGLES = [
-  ['autoHide', 'hide', 'Auto-hide'],
-  ['smartHide', 'smart', 'Smart hide'],
-  ['startSearch', 'search', 'Start = Search'],
-  ['hideTaskbar', 'taskbar', 'Hide taskbar'],
-  ['indicators', 'dots', 'Indicators'],
-  ['bounce', 'bounce', 'Animations'],
-  ['showRunning', 'running', 'Open apps'],
-  ['hideFullscreen', 'full', 'Full-screen hide'],
-  ['previews', 'previews', 'Previews'],
-  ['widgets', 'widgets', 'Widgets'],
-  ['followMouse', 'displays', 'All displays'],
-  ['reserveSpace', 'reserve', 'Keep space'],
-];
-const PAGES = [
-  ['position', 'pos', s => NAMES.position[s.position]],
-  ['pack', 'pack', s => s.iconPack || 'Icon pack'],
-  ['theme', 'theme', s => NAMES.theme[s.theme]],
-  ['iconStyle', 'tiles', s => NAMES.iconStyle[s.iconStyle]],
-  ['startup', 'start', s => 'Start with Windows'],
-];
 
-function fill(el) { el.style.setProperty('--p', (el.value - el.min) / (el.max - el.min) * 100 + '%'); }
+function fill(el) { if (el) el.style.setProperty('--p', (el.value - el.min) / (el.max - el.min) * 100 + '%'); }
 
-const SECTIONS = [
-  ['Behaviour', [
-    ['autoHide', 'hide', 'Auto-hide', 'Slide the dock away when not in use'],
-    ['smartHide', 'smart', 'Smart hide', 'Only hide when a window covers it'],
-    ['hideTaskbar', 'taskbar', 'Hide the Windows taskbar'],
-    ['hideFullscreen', 'full', 'Hide in full-screen apps'],
-    ['reserveSpace', 'reserve', 'Keep space for the dock', s => s.autoHide ? 'Turning this on turns off Auto-hide' : 'Maximised windows stop above it'],
-    ['startSearch', 'search', 'Start button opens Search'],
-  ]],
-  ['Dock', [
-    ['showRunning', 'running', 'Open apps', 'Unpinned apps get their own pill'],
-    ['indicators', 'dots', 'Running indicators'],
-    ['previews', 'previews', 'Window previews'],
-    ['widgets', 'widgets', 'Widgets', 'Clock, battery and now playing'],
-    ['tray', 'tray', 'System tray', 'Tray apps at the end of the dock'],
-    ['bounce', 'bounce', 'Animations'],
-    ['followMouse', 'displays', 'Show on all displays'],
-  ]],
-  ['Look', [
-    ['position', 'pos', 'Position', s => NAMES.position[s.position]],
-    ['theme', 'theme', 'Appearance', s => NAMES.theme[s.theme]],
-    ['iconStyle', 'tiles', 'Icon style', s => NAMES.iconStyle[s.iconStyle]],
-    ['pack', 'pack', 'Icon pack', s => s.iconPack || 'None'],
-  ]],
-  ['System', [
-    ['startup', 'start', 'Start with Windows'],
-  ]],
+const CATEGORIES = [
+  { key: 'weather', parent: 'widgets', title: 'Weather', icon: 'weather', description: 'Location and units for the weather widget', terms: 'weather forecast temperature location gps home address street town city postcode zip country celsius fahrenheit units privacy' },
+  { key: 'home', solo: true, title: 'Home', icon: 'tiles', description: 'Every section at a glance', terms: 'home overview start' },
+  { key: 'icons', title: 'Icons', icon: 'pack', description: 'Icon style, icon pack, icon colours, and dock items', terms: 'icon icons style rounded tile circle plain pack black and white icons colours light dark tiles app colours artwork edit dock items change icon size scale add apps' },
+  { key: 'colours', title: 'Appearance', icon: 'colours', description: 'Light or dark, colours, accent, font, and dock shape', terms: 'font fonts typeface text family segoe shape pill colour color custom dock colour widget widgets clock card accent tint transparency opacity strength see through clear solid menus panels match dock light dark theme hex' },
+  { key: 'layout', title: 'Dock', icon: 'pos', description: 'Position, size, items, hiding, and animations', terms: 'position bottom left right size padding magnification app page connected dock spacing gap' },
+  { key: 'pillOrder', parent: 'layout', solo: true, title: 'Pill order', icon: 'dots', description: 'Which part of the dock goes where', terms: 'pill pills order sections arrange left right middle widgets apps folders open running' },
+  { key: 'animations', parent: 'layout', solo: true, title: 'Animations', icon: 'bounce', description: 'Speed and which animations are on', terms: 'animation animations speed hover lift jelly launch bounce spring springy card page wave stagger drop settle hide show' },
+  { key: 'widgets', title: 'Widgets', icon: 'widgets', description: 'Choose, arrange, and space widgets', terms: 'widget style dg style windows style dot matrix clock battery wifi now playing system tray order drag move left middle right gap spacing' },
+  { key: 'appsIcons', parent: 'layout', title: 'Dock items', icon: 'pack', description: 'Open apps, folders, Start, Recycle Bin, tray, and USB drives', terms: 'download transfer copy progress usb drive memory stick external eject import photos lock unlock apps folders files start button recycle bin tray icon custom icon apk icon pack black and white icons edit dock items scale add remove pins' },
+  { key: 'behaviour', parent: 'layout', title: 'Hiding and search', icon: 'smart', description: 'Auto-hide, Windows key, previews, and animations', terms: 'auto hide smart hide full screen search shortcut start animations speed' },
+  { key: 'launchpad', solo: true, title: 'Launchpad', icon: 'launch', description: 'All your apps and search, in a card by the dock', terms: 'search find spotlight launchpad apps all applications grid full screen compact right click start icons customise customize icon pack folders categories sidebar layout' },
+  { key: 'lpTabs', parent: 'launchpad', solo: true, title: 'Tab order', icon: 'pos', description: 'The order of Launchpad categories', terms: 'tab tabs order categories launchpad sort arrange' },
+  { key: 'lpIcons', parent: 'launchpad', solo: true, title: 'Customise icons', icon: 'brush', description: 'Change the icon of any app', terms: 'icon icons change custom customise customize app launchpad pack' },
+  { key: 'system', title: 'System', icon: 'displays', description: 'Displays, Windows taskbar, and startup', terms: 'taskbar windows taskbar hide display monitor screen pointer follow multiple docks each second third startup windows' },
 ];
-const PAGE_KEYS = new Set(['position', 'theme', 'iconStyle', 'pack']);
-
+const PILLS = {
+  apps: ['Apps', 'tiles', 'Start and your pinned apps'],
+  running: ['Open apps', 'running', 'Apps that are open but not pinned'],
+  files: ['Folders and files', 'folder', 'Folders, files and the Bin'],
+  widgets: ['Widgets', 'widgets', 'Clock, battery, music and tray'],
+};
+// a position box: type a number (or use the arrow keys) to move the row there
+function numBox(i, n, fn, label) {
+  return `<input class="pos" type="text" inputmode="numeric" maxlength="2" value="${i + 1}" aria-label="Position of ${esc(label)}, 1 to ${n}"
+    onfocus="this.select()" onkeydown="numKey(event, ${i}, ${n}, ${fn})" onchange="numSet(this, ${i}, ${n}, ${fn})">`;
+}
+function numKey(e, i, n, fn) {
+  if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); return; }
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); const to = i + (e.key === 'ArrowUp' ? -1 : 1); if (to >= 0 && to < n) fn(i, to, true); }
+}
+function numSet(el, i, n, fn) {
+  const v = parseInt(el.value, 10);
+  if (!Number.isFinite(v)) { el.value = i + 1; return; }
+  const to = Math.max(1, Math.min(n, v)) - 1;
+  if (to === i) { el.value = i + 1; return; }
+  fn(i, to);
+}
+const moveIn = (list, i, to) => { const o = list.slice(); const [x] = o.splice(i, 1); o.splice(to, 0, x); return o; };
+async function setPillPos(i, to, keep) {
+  S = await mdSetPillOrder(moveIn(S.pillOrder || ['apps', 'running', 'files', 'widgets'], i, to)); apply(); await renderPage();
+  if (keep) { const b = document.querySelectorAll('input.pos')[to]; if (b) b.focus(); }
+}
+async function resetPills() { S = await mdSetPillOrder([]); apply(); renderPage(); }
+const categoryByKey = key => CATEGORIES.find(c => c.key === key);
+function settingIcon(key) {
+  return I[key] ? `<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">${I[key]}</svg>` : '';
+}
+function pageRow(target, icon, label, detail, value = '') {
+  return `<button class="lrow category-row" onclick="openPage('${target}')">${settingIcon(icon)}<span class="t">${esc(label)}${detail ? `<small>${esc(detail)}</small>` : ''}</span><span class="v">${value ? `${esc(value)} ` : ''}${CHEV}</span></button>`;
+}
+function toggleRow(key, icon, label, detail = '') {
+  return `<div class="lrow" role="button" tabindex="0" onclick="toggle('${key}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggle('${key}')}">${settingIcon(icon)}<span class="t">${esc(label)}${detail ? `<small>${esc(detail)}</small>` : ''}</span><span class="sw ${S[key] ? 'on' : ''}"></span></div>`;
+}
+function actionRow(target, icon, label, detail = '') {
+  if (target === 'apps') return `<button class="lrow category-row" onclick="openApps(page || 'icons')">${settingIcon(icon)}<span class="t">${esc(label)}${detail ? `<small>${esc(detail)}</small>` : ''}</span><span class="v">${CHEV}</span></button>`;
+  return pageRow(target, icon, label, detail);
+}
 function renderTiles() {
-  let h = '';
-  for (const [title, rows] of SECTIONS) {
-    h += `<div class="sec">${title}</div><div class="card">`;
-    for (const [k, ic, lbl, extra] of rows) {
-      const icon = I[ic] ? `<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">${I[ic]}</svg>` : '';
-      if (PAGE_KEYS.has(k)) {
-        h += `<div class="lrow" onclick="openPage('${k}')">${icon}<div class="t">${lbl}</div><div class="v">${esc(extra(S))}${CHEV}</div></div>`;
-      } else {
-        const sx = typeof extra === 'function' && k === 'reserveSpace' ? extra(S) : extra;
-        const sub = typeof sx === 'string' ? `<small>${esc(sx)}</small>` : '';
-        h += `<div class="lrow" onclick="toggle('${k}')">${icon}<div class="t">${lbl}${sub}</div><div class="sw ${S[k] ? 'on' : ''}"></div></div>`;
-      }
-    }
-    h += `</div>`;
+  const normalize = value => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const q = normalize(($('settingsQuery')?.value || '').trim());
+  const matches = CATEGORIES.filter(c => q ? normalize(`${c.title} ${c.description} ${c.terms}`).includes(q) : !c.parent && !c.solo);
+  const rows = matches.map(c => `<button class="lrow category-row" onclick="openPage('${c.key}')">${settingIcon(c.icon)}<span class="t">${esc(c.title)}<small>${esc(c.parent && q ? categoryByKey(c.parent).title + ' › ' + c.description : c.description)}</small></span><span class="v">${CHEV}</span></button>`).join('');
+  const lock = !q || 'lock unlock dock icons move remove'.includes(q) ? `<div class="card home-lock">${toggleRow('lockDock', 'lock', S && S.lockDock ? 'Dock is locked' : 'Lock the dock', S && S.lockDock ? 'Icons can\'t be moved or removed' : 'Stop icons being moved or removed')}</div>` : '';
+  const lpDetail = 'Apps and search · ' + (S && S.launchpadPanel === 'icons' ? 'icons-only panel' : 'panel with words');
+  const wall = !q ? `<div class="card home-lock"><div class="lrow category-row" role="button" tabindex="0" onclick="openPage('launchpad')" onkeydown="if(event.key==='Enter'){openPage('launchpad')}">${settingIcon('launch')}<span class="t">Launchpad<small>${esc(lpDetail)}</small></span>
+    <button class="pill" onclick="event.stopPropagation(); openPage('launchpad')">Customise</button><span class="v">${CHEV}</span></div></div>` : '';
+  if (q) {
+    $('tiles').innerHTML = `<div class="sec">Matching settings</div>${rows ? `<div class="card">${rows}</div>` : (lock ? '' : `<div class="empty">No matching settings</div>`)}${lock}`;
+    return;
   }
-  $('tiles').innerHTML = h;
+  $('tiles').innerHTML = renderQuick();
+  bindQuick();
 }
 
+// ---- quick panel: the settings you change most, one click away ----
+const QUICK = [['autoHide', 'hide', 'Auto-hide'], ['lockDock', 'lock', 'Lock dock'], ['hideTaskbar', 'taskbar', 'Hide taskbar'],
+  ['widgets', 'widgets', 'Widgets'], ['previews', 'previews', 'Previews'], ['bounce', 'bounce', 'Animations']];
+function qseg(key, opts) {
+  return `<div class="qseg" role="radiogroup" style="grid-template-columns:repeat(${opts.length},1fr)">` + opts.map(([v, n]) =>
+    `<button type="button" role="radio" aria-checked="${S[key] === v}" class="${S[key] === v ? 'sel' : ''}" onclick="set('${key}','${v}')">${esc(n)}</button>`).join('') + `</div>`;
+}
+function renderQuick() {
+  if (!S) return '';
+  let h = `<div class="qgrid">` + QUICK.map(([k, ic, n]) =>
+    `<button type="button" class="qt ${S[k] ? 'on' : ''}" role="switch" aria-checked="${!!S[k]}" onclick="toggle('${k}')">${settingIcon(ic)}<span>${esc(n)}</span></button>`).join('') + `</div>`;
+  h += `<div class="sec">Position</div>` + qseg('position', [['left', 'Left'], ['bottom', 'Bottom'], ['top', 'Top'], ['right', 'Right']]);
+  h += `<div class="sec">Theme</div>` + qseg('theme', [['auto', 'Match Windows'], ['light', 'Light'], ['dark', 'Dark']]);
+  h += `<div class="sec">Size</div><div class="card sliders qsl">
+    <div class="srow" title="Icon size"><span title="Icon size">${svg('<rect x="2.5" y="2.5" width="11" height="11" rx="3"/>')}</span><input type="range" id="qSize" min="32" max="96" step="1" aria-label="Icon size"><input class="val" id="qSizeVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off" aria-label="Icon size in pixels"><span class="rst-pad"></span></div>
+    <div class="srow" title="Spacing between app icons and widgets"><span title="Spacing">${svg('<path d="M2 4v8M14 4v8M5 8h6M5 8l1.5-1.5M5 8l1.5 1.5M11 8 9.5 6.5M11 8 9.5 9.5"/>')}</span><input type="range" id="qPad" min="0" max="20" step="1" aria-label="Spacing for app icons and widgets"><input class="val" id="qPadVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off" aria-label="Spacing in pixels"><button type="button" class="rst" title="Back to the default spacing" aria-label="Reset spacing" onclick="set('spacing', 0)">${svg('<path d="M3 8a5 5 0 1 0 1.5-3.5M3 2.5v3h3"/>')}</button></div>
+  </div>`;
+  h += `<button type="button" class="qall" onclick="goFull('home')"><span>All settings<br><small>Appearance, icons, dock, widgets, Launchpad, system</small></span>${CHEV}</button>`;
+  return h;
+}
+function bindQuick() {
+  const sz = $('qSize'), pd = $('qPad');
+  if (!sz) return;
+  sz.value = S.iconSize; pd.value = S.appPadding || 0; fill(sz); fill(pd);
+  $('qSizeVal').value = sz.value; $('qPadVal').value = pd.value;
+  slider('qSize', 'iconSize', v => v, v => setVal('qSizeVal', v));
+  slider('qPad', 'spacing', v => v, v => setVal('qPadVal', v));
+  typeable('qSizeVal', 'qSize', 'iconSize', t => +t);
+  typeable('qPadVal', 'qPad', 'spacing', t => +t);
+}
+
+// ---- all settings: the wide window with the side panel ----
+function renderSide() {
+  const own = ownerOf(page);
+  const q = $('sideQuery') ? $('sideQuery').value : '';
+  $('side').innerHTML = `<div class="stop">${WINDOWED ? '<span class="grow"></span>' : `<button class="sback" onclick="exitFull()">${BACK}<span>Quick settings</span></button>`}<button type="button" class="refresh" title="Refresh the dock: reload every icon and redraw it" aria-label="Refresh the dock" onclick="refreshDock(this)">${svg('<path d="M13 8a5 5 0 1 1-1.5-3.5M13 2.5v3h-3"/>')}</button></div>
+    <div class="search">${SRCH}<input id="sideQuery" placeholder="Search settings" spellcheck="false" autocomplete="off"></div>` +
+    NAV.map(([k, ic, n]) => `<button class="si ${own === k ? 'on' : ''}" onclick="openPage('${k}')">${settingIcon(ic)}<span>${esc(n)}</span></button>`).join('') +
+    `<div class="grow"></div><div class="dv"></div><button class="si ${page === 'about' ? 'on' : ''}" onclick="openPage('about')">${svg('<circle cx="8" cy="8" r="6"/><path d="M8 7.2v4M8 5v.1"/>')}<span>About</span></button>`;
+  const sq = $('sideQuery');
+  sq.value = q;
+  sq.oninput = () => { if (sq.value.trim()) { page = 'search'; renderPage(); } else openPage(lastSection); };
+}
+let lastSection = 'home';
+function goFull(p) {
+  if (!WINDOWED) { window.mdOpenWindow && mdOpenWindow(p || 'home'); return; } // All settings has its own window
+  FULL = true;
+  document.documentElement.classList.add('full');
+  window.mdPanelWidth && mdPanelWidth(760);
+  if ($('settingsQuery')) $('settingsQuery').value = '';
+  openPage(p || 'home');
+}
+async function refreshDock(btn) {
+  btn.classList.add('spin');
+  try { if (window.mdRefreshDock) await mdRefreshDock(); S = await mdState(); } finally { setTimeout(() => btn.classList.remove('spin'), 300); }
+  apply(); if (page) renderPage();
+}
+function exitFull() {
+  if (WINDOWED) return;
+  FULL = false;
+  document.documentElement.classList.remove('full');
+  window.mdPanelWidth && mdPanelWidth(360);
+  closePageQuiet();
+  apply();
+}
+function searchResults(raw) {
+  const normalize = value => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const q = normalize(raw);
+  const hits = CATEGORIES.filter(c => normalize(`${c.title} ${c.description} ${c.terms}`).includes(q));
+  const rows = hits.map(c => `<button class="lrow category-row" onclick="$('sideQuery').value='';openPage('${c.key === 'appearance' ? 'look' : c.key}')">${settingIcon(c.icon)}<span class="t">${esc(c.title)}<small>${esc(c.parent ? categoryByKey(c.parent).title + ' › ' + c.description : c.description)}</small></span><span class="v">${CHEV}</span></button>`).join('');
+  return head('Search') + (rows ? `<div class="card">${rows}</div>` : `<div class="empty">No matching settings</div>`);
+}
+$('settingsQuery').addEventListener('input', renderTiles);
+function parkControls() {
+  const parking = $('sliderParking');
+  parking.appendChild($('layoutControls'));
+  parking.appendChild($('behaviorControls'));
+}
+function renderCategory(key, noHead) {
+  const cat = categoryByKey(key);
+  if (!cat) return '';
+  let h = noHead ? '' : head(cat.title, cat.parent ? `openPage('${cat.parent}', true)` : 'closePage()');
+  if (key === 'appearance') {
+    h += `<div class="sec">Look</div><div class="card">`;
+    h += pageRow('colours', 'colours', 'Colours', 'Light or dark, dock, accent, widgets, and icons', S.dockColor === 'wallpaper' ? 'Wallpaper' : S.dockColor ? 'Custom' : NAMES.theme[S.theme]);
+    h += pageRow('theme', 'theme', 'Theme', 'Colour and dock shape', NAMES.theme[S.theme]);
+    h += pageRow('iconStyle', 'tiles', 'Icon style', 'The shape of app icons', NAMES.iconStyle[S.iconStyle]);
+    h += `</div><div class="sec">Dock</div><div class="card">`;
+    h += pageRow('layout', 'pos', 'Layout and size', 'Position, icon size, and spacing', NAMES.position[S.position] || 'Bottom');
+    h += pageRow('widgets', 'widgets', 'Widgets', 'Clock, battery, music, and tray', '');
+    h += pageRow('appsIcons', 'pack', 'Apps and icons', 'Dock items and icon packs', S.iconPack || '');
+    return h + `</div>`;
+  }
+  if (key === 'layout') {
+    h += `<div class="sec">Position and layout</div><div class="card">`;
+    h += FULL ? `<div class="lrow">${settingIcon('pos')}<span class="t">Position</span><span style="width:260px">${qseg('position', [['left', 'Left'], ['bottom', 'Bottom'], ['top', 'Top'], ['right', 'Right']])}</span></div>`
+      : pageRow('position', 'pos', 'Position', 'Choose the screen edge', NAMES.position[S.position] || 'Bottom');
+    h += pageRow('pillOrder', 'dots', 'Pill order', 'Which part of the dock goes where');
+    h += toggleRow('connected', 'style', 'Connected dock', 'Join the dock sections into one bar');
+    h += `</div><div class="sec">Size and spacing</div><div id="layoutControlSlot"></div>`;
+    return h + renderCategory('appsIcons', true) + renderCategory('behaviour', true);
+  }
+  if (key === 'pillOrder') {
+    const order = S.pillOrder || ['apps', 'running', 'files', 'widgets'];
+    h += `<div class="sec">Left to right</div><div class="card">` + order.map((k, i) => `<div class="lrow">${numBox(i, order.length, 'setPillPos', PILLS[k][0])}${settingIcon(PILLS[k][1])}<span class="t">${esc(PILLS[k][0])}<small>${esc(PILLS[k][2])}</small></span></div>`).join('') + `</div>`;
+    h += `<div class="pfoot"><span class="muted">Type a number to move a pill: 1 is on the left (the top, for a dock on the side).</span><button class="link" onclick="resetPills()">Reset</button></div>`;
+    return h;
+  }
+  if (key === 'appsIcons') {
+    h += `<div class="sec">Dock items</div><div class="card">`;
+    h += toggleRow('showRunning', 'running', 'Open apps', 'Unpinned apps get their own pill');
+    h += toggleRow('showFolderFiles', 'folder', 'Folders and files', 'Pinned folders get their own pill');
+    h += toggleRow('startButton', 'start', 'Start button', 'Opens Start or Search');
+    h += toggleRow('recycleBin', 'bin', 'Recycle Bin');
+    h += toggleRow('tray', 'tray', 'System tray', 'Tray apps at the end of the dock');
+    h += toggleRow('usbWidget', 'usb', 'USB drives', 'Show a drive while it\'s plugged in');
+    h += toggleRow('folderActivity', 'folder', 'Show transfers on folders', 'Downloads and copies fill the folder\'s border');
+    h += `</div><div class="sec">Manage</div><div class="card">`;
+    h += toggleRow('lockDock', 'lock', 'Lock the dock', 'Stop icons being moved or removed');
+    h += actionRow('apps', 'search', 'Add apps', 'Find installed apps to pin');
+    return h + `</div>`;
+  }
+  if (key === 'behaviour') {
+    h += `<div class="sec">Hiding</div><div class="card">`;
+    h += toggleRow('autoHide', 'hide', 'Auto-hide', 'Slide the dock away when not in use');
+    h += toggleRow('smartHide', 'smart', 'Smart hide', 'Only hide when a window covers it');
+    h += toggleRow('hideFullscreen', 'full', 'Hide in full-screen apps');
+    h += `</div><div class="sec">Search</div><div class="card">`;
+    h += toggleRow('startSearch', 'search', 'Start button opens Launchpad', 'With search ready. Off: it opens the Windows Start menu');
+    h += toggleRow('winKey', 'search', 'Windows key opens Launchpad', 'Ctrl+Esc still opens the Windows Start menu');
+    h += toggleRow('searchHotkey', 'search', 'Search keyboard shortcut', 'Open Search from anywhere');
+    h += `</div><div class="sec">Feedback</div><div class="card">`;
+    h += toggleRow('indicators', 'dots', 'Running indicators', 'Dots under open apps');
+    h += toggleRow('previews', 'previews', 'Window previews', 'Show open windows on hover');
+    h += toggleRow('attention', 'bounce', 'Attention bounce and dot', 'An app that wants you — a new message, a finished download — bounces once and shows a red dot. Off: neither');
+    h += `</div><div class="sec">Animations</div><div class="card" style="padding:0">`;
+    h += pageRow('animations', 'bounce', 'Animations', 'Speed and which ones are on', S.bounce ? 'On' : 'Off');
+    h += `</div>`;
+    return h;
+  }
+  if (key === 'animations') {
+    h += `<div class="card" style="padding:0">` + toggleRow('bounce', 'bounce', 'Animations', 'Turn all dock animations on or off') + `</div>`;
+    h += `<div class="sec">Speed</div><div id="animSpeedSlot"></div>`;
+    const off = !S.bounce;
+    h += `<div class="sec">Which animations</div><div class="card${off ? ' dim' : ''}" style="padding:0">`;
+    h += toggleRow('hoverLift', 'bounce', 'Hover lift', 'The icon you point at lifts and grows a little');
+    h += toggleRow('cardSpring', 'bounce', 'Springy cards', 'Cards and Launchpad grow out with a small overshoot');
+    h += toggleRow('pageWave', 'bounce', 'Page-change wave', 'Icons of a new page arrive one after another');
+    h += toggleRow('jelly', 'bounce', 'Jelly launch', 'A starting app squashes and stretches (off: a gentle bounce)');
+    h += toggleRow('hideSpring', 'bounce', 'Springy hide & show', 'The dock returns with a small bounce');
+    h += toggleRow('dropSettle', 'bounce', 'Settle on drop', 'An icon you drop lands with a small squash');
+    h += `</div>`;
+    if (off) h += `<div class="muted" style="margin:8px 2px 0;font-size:11.5px">Turn Animations on to use these.</div>`;
+    return h;
+  }
+  if (key === 'launchpad') {
+    h += `<div class="sec" style="margin-top:4px">Side panel</div><div class="seg lp-seg" role="radiogroup" aria-label="Side panel">` +
+      [['text', 'Words', 'Icons and names'], ['icons', 'Icons only', 'More room for apps']].map(([v, n, d]) =>
+        `<button type="button" role="radio" aria-checked="${S.launchpadPanel === v}" class="seg-opt ${S.launchpadPanel === v ? 'sel' : ''}" onclick="set('launchpadPanel','${v}')">
+          <span class="lp-side ${v}"><b></b><b></b><b></b><b></b><i></i><i></i><i></i><i></i><i></i><i></i></span><span>${esc(n)}</span><small class="muted">${esc(d)}</small></button>`).join('') + `</div>`;
+    h += `<div class="sec">Grid</div><div class="card sliders">
+      <div class="srow pack-scale-row"><label class="alpha-label" for="lpCols">Across</label><input type="range" id="lpCols" min="3" max="12" step="1" aria-label="Apps across">
+        <div class="pack-scale-value"><input class="val" id="lpColsVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off" aria-label="Apps across"><span>apps</span></div></div>
+      <div class="srow pack-scale-row"><label class="alpha-label" for="lpIcon">App size</label><input type="range" id="lpIcon" min="32" max="112" step="2" aria-label="App size">
+        <div class="pack-scale-value"><input class="val" id="lpIconVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off" aria-label="App size in pixels"><span>px</span></div></div>
+      <div class="lp-prev" id="lpPrev" aria-hidden="true"></div></div>`;
+    h += `<div class="card" style="margin-top:8px">` + toggleRow('launchpadRecent', 'previews', 'Show Recent', 'Apps you opened lately, on Home') + toggleRow('launchpadNames', 'tiles', 'Show app names') + toggleRow('launchpadTidy', 'hide', 'Hide doubles and helper apps', 'Uninstallers, readmes and 32/64-bit copies') + `</div>`;
+    h += `<div class="card" style="margin-top:12px">`;
+    h += pageRow('lpTabs', 'pos', 'Tab order', 'Choose the order of the categories');
+    h += pageRow('lpIcons', 'brush', 'Customise icons', 'Change the icon of any app');
+    h += `</div>`;
+    if (S.launchpadSorted) h += `<div class="pfoot" style="margin-top:8px"><span class="muted">You've moved apps, made categories or changed the tab order.</span><button class="link" onclick="resetLpGroups()">Undo all</button></div>`;
+    h += `<div class="pfoot" style="margin-top:12px"><span class="muted">Right-click an app to add it to Favourites. Drag it onto the dock to keep it there, onto another app to make a folder, or onto a category to move it.</span>
+      <button class="pill primary" onclick="mdOpenLaunchpad()">Open Launchpad</button></div>`;
+    return h;
+  }
+  if (key === 'lpTabs') {
+    h += `<div class="list" id="lpTabList"><div class="empty">Loading…</div></div>
+      <div class="pfoot"><span class="muted">Type a number to move a category. The side panel shows them in this order.</span></div>`;
+    return h;
+  }
+  if (key === 'lpIcons') {
+    h += `<div class="search">${SRCH}<input id="q" placeholder="Search apps" spellcheck="false"></div><div class="list scroll" id="lpApps"><div class="empty">Loading…</div></div>
+      <div class="pfoot"><span class="muted">Pick one of your icons (Pictures › DG-Dock Icon)${S.iconPack ? ', one from your icon pack' : ''} or a file. Changes show in the dock too.</span></div>`;
+    return h;
+  }
+  if (key === 'system') {
+    const mode = S.displayMode || 'follow', ds = S.displays || [];
+    const MODES = [
+      ['follow', 'One dock that follows the pointer', 'Moves to the display you\'re using'],
+      ['main', 'One dock on the main display', 'Stays on your main display'],
+      ['each', 'A dock on each display I choose', 'Every chosen display gets its own dock'],
+    ];
+    h += `<div class="sec">Docks on your displays</div><div class="card" role="radiogroup" aria-label="Docks on your displays">`;
+    h += MODES.map(([v, t, d]) => `<button class="lrow category-row radio-row" role="radio" aria-checked="${mode === v}" onclick="set('displayMode','${v}')">
+      <span class="radio ${mode === v ? 'on' : ''}"></span><span class="t">${esc(t)}<small>${esc(d)}</small></span></button>`).join('');
+    h += `</div>`;
+    if (mode === 'each') {
+      const on = d => (S.dockDisplays || []).some(x => [d.id, d.key].some(v => v && x.toUpperCase() === v.toUpperCase()));
+      const count = ds.filter(d => on(d)).length;
+      h += `<div class="sec sec-row"><span>Show a dock on</span><button class="pill" onclick="mdIdentify()" title="Show each display's number on it">Identify</button></div><div class="card">` + ds.map(d => {
+        const checked = on(d), last = checked && count <= 1;
+        return `<div class="lrow${last ? ' disabled' : ''}" role="switch" aria-checked="${checked}" tabindex="0" title="${last ? 'At least one display keeps a dock' : ''}"
+          onclick="${last ? '' : `toggleDisplay(${ds.indexOf(d)}, ${!checked})`}">${settingIcon('displays')}
+          <span class="t"><span class="tl">${esc(d.name)}${d.main ? '<span class="tag">Main</span>' : ''}</span><small>${esc([d.model, d.size].filter(Boolean).join(' · '))}</small></span><span class="sw ${checked ? 'on' : ''}"></span></div>`;
+      }).join('') + `</div>`;
+      if (ds.length < 2) h += `<div class="alpha-help" style="margin-top:6px">Only one display is connected. Docks for other displays start when you plug them in.</div>`;
+      else h += `<div class="alpha-help" style="margin-top:6px">The extra docks share your pins and settings. Make changes here or on the main display's dock.</div>`;
+      h += `<div class="sec">Open apps</div><div class="card">` + toggleRow('isolate', 'displays', 'Only show apps open on that display',
+        'Each dock shows the apps with windows on its own display. Pinned apps stay on every dock.') + `</div>`;
+    }
+    h += `<div class="sec">Windows taskbar</div><div class="card">` + toggleRow('hideTaskbar', 'taskbar', 'Hide the Windows taskbar', 'The dock takes its place') + `</div>`;
+    h += `<div class="sec">Startup</div><div class="card">`;
+    h += toggleRow('startup', 'start', 'Start with Windows');
+    return h + `</div>`;
+  }
+  return h;
+}
+
+// Settings' background: the dock colour (when menus match it) or the theme's, and as
+// see-through as the dock's Colour strength over the blurred backdrop.
+function paintPanel() {
+  const root = document.documentElement.style;
+  const dark = S.uiDark ?? S.dark;
+  const base = S.menuTint && S.dockColor ? S.uiPanel : dark ? '#202020' : '#f3f3f3';
+  if (ENV.acrylic) root.setProperty('--panel', hexA(base, S.uiAlpha ?? .72));
+  else if (S.menuTint && S.dockColor) root.setProperty('--panel', S.uiPanel);
+  else root.removeProperty('--panel');
+}
+
+// ---- Appearance: live dock preview ----
 function apply() {
-  document.documentElement.classList.toggle('light', !ENV.dark);
+  document.documentElement.classList.toggle('light', !(S.uiDark ?? S.dark));
   document.documentElement.classList.toggle('acrylic', !!ENV.acrylic);
-  document.documentElement.style.setProperty('--accent', ENV.accent);
-  document.documentElement.style.setProperty('--on-accent', ENV.onAccent);
+  paintPanel();
+  if (S.font) document.documentElement.style.setProperty('--font', `"${S.font}", system-ui, sans-serif`);
+  else document.documentElement.style.removeProperty('--font');
+  document.documentElement.style.setProperty('--accent', S.accentNow || ENV.accent);
+  document.documentElement.style.setProperty('--on-accent', S.onAccentNow || ENV.onAccent);
   renderTiles();
   $('ver').textContent = S.versionName ? S.versionName : S.version ? 'v' + S.version : '';
   $('ver').title = S.version ? 'Build ' + S.version : '';
   $('update').style.display = S.update > 0 ? 'flex' : 'none';
-  $('updTitle').textContent = 'Version ' + S.update + ' is ready to install';
+  $('updTitle').textContent = 'Build ' + S.update + ' is ready to install';
   if (document.activeElement !== $('size')) $('size').value = S.iconSize;
+  if (document.activeElement !== $('padding')) $('padding').value = S.appPadding || 0;
+  if ($('transparency') && document.activeElement !== $('transparency')) $('transparency').value = S.dockTransparency || 0;
   if (document.activeElement !== $('mag')) $('mag').value = Math.round(S.magnification * 100);
   if (document.activeElement !== $('per')) $('per').value = S.perPage > 0 ? S.perPage : 21;
   if (document.activeElement !== $('anim')) $('anim').value = S.animSpeed || 5;
   setVal('animVal', S.animSpeed || 5);
-  fill($('size')); fill($('mag')); fill($('per')); fill($('anim'));
+  fill($('size')); fill($('padding')); fill($('transparency')); fill($('mag')); fill($('per')); fill($('anim'));
   setVal('perVal', S.perPage > 0 ? S.perPage : 'All');
   setVal('sizeVal', S.iconSize);
+  setVal('paddingVal', S.appPadding || 0);
+  if ($('transparencyVal')) $('transparencyVal').textContent = (S.dockTransparency || 0) + '%';
   setVal('magVal', S.magnification > 1.01 ? Math.round(S.magnification * 100) + '%' : 'Off');
   reportSize();
 }
 
 const reflowLic = t => t.replace(/([^\n])\n(?!\n| *[a-z]\) | *\d+\. |=)[ \t]*/g, '$1 ');
-async function set(k, v) { S = await mdSet(k, v); apply(); if (page) renderPage(); }
+async function set(k, v) {
+  if (k === 'wc') { // a widget colour: for all widgets, or the one picked above the swatches
+    if (WSEL) { k = 'widgetColorFor'; v = WSEL + '|' + v; } else k = 'widgetColor';
+  }
+  if (guessColour(k, v)) { apply(); if (page) renderPage(); } // show the pick straight away
+  const tick = ++setTick;
+  const st = await mdSet(k, v);
+  if (tick !== setTick) return; // a newer click is on its way: let that one draw
+  S = st; apply(); if (page) renderPage();
+}
+let setTick = 0;
+// guessColour updates the page's copy of the settings for a colour pick before the dock
+// has answered, so the selection, preview and swatches change on the click.
+function guessColour(k, v) {
+  const hex = x => /^#[0-9a-f]{6}$/i.test(x || '');
+  switch (k) {
+    case 'dockColor':
+      S.dockColor = v;
+      if (hex(v)) S.dockFill = v;
+      if (!v && S.accentColor === 'dock') S.accentColor = '';
+      if (S.menuTint && hex(v)) S.uiPanel = v;
+      return true;
+    case 'accentColor':
+      S.accentColor = v;
+      if (hex(v)) { S.accentNow = v; S.onAccentNow = lumHex(v) < 150 ? '#ffffff' : '#000000'; }
+      else if (!v && S.winAccent) S.accentNow = S.winAccent;
+      return true;
+    case 'widgetColor':
+      S.widgetColor = v; S.widgetFill = hex(v) ? v : v ? S.widgetFill : '';
+      return true;
+    case 'widgetColorFor': {
+      const [w, c] = v.split('|');
+      S.widgetColors = { ...(S.widgetColors || {}) }; S.widgetFills = { ...(S.widgetFills || {}) };
+      if (c) S.widgetColors[w] = c; else delete S.widgetColors[w];
+      S.widgetFills[w] = hex(c) ? c : c === 'dock' ? '' : !c ? (S.widgetFill || '') : S.widgetFills[w];
+      return true;
+    }
+    case 'menuTint': S.menuTint = !!v; return true;
+    case 'theme': case 'widgetStyle': case 'clockFace': S[k] = v; return true;
+  }
+  return false;
+}
+// darkText: black reads at least as well as white on h (as the dock decides it)
+function darkText(h) {
+  const n = parseInt(h.slice(1), 16), lin = v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); };
+  const L = .2126 * lin(n >> 16 & 255) + .7152 * lin(n >> 8 & 255) + .0722 * lin(n & 255);
+  const cb = (L + .05) / .05, cw = 1.05 / (L + .05);
+  return lumHex(h) > 150 || (cb >= 3.5 && cb >= .7 * cw);
+}
+function lumHex(h) { const n = parseInt(h.slice(1), 16); return .299 * (n >> 16 & 255) + .587 * (n >> 8 & 255) + .114 * (n & 255); }
+let WSEL = ''; // Colours › Widget colour: '' = all widgets, or one widget's key
 function toggle(k) { set(k, !S[k]); }
+function toggleDisplay(i, on) { const d = (S.displays || [])[i]; if (d) set('dockDisplay', { id: d.id, on }); }
+async function resetMainSliders() {
+  for (const [key, value] of [['iconSize', 54], ['appPadding', 0], ['widgetSpacing', 0], ['perPage', 10], ['animSpeed', 5]]) {
+    S = await mdSet(key, value);
+  }
+  apply();
+}
 
 function setVal(id, v) { const e = $(id); if (e && document.activeElement !== e) e.value = v; }
 function typeable(valId, rangeId, key, parse, conv = v => v) {
@@ -444,50 +1069,357 @@ function slider(id, key, conv, show) {
     S = await mdSet(key, conv(v)); busy = false;
     if (pending !== null) send();
   };
-  $(id).addEventListener('input', e => { fill(e.target); show(+e.target.value); pending = +e.target.value; send(); });
+  $(id).addEventListener('input', e => { fill(e.target); show(+e.target.value); pending = +e.target.value; if (S) S[key] = conv(pending); send(); });
+}
+let dockTransparencyPending = null, dockTransparencySending = false;
+function queueDockTransparency(value) {
+  const slider = $('transparency'), valueLabel = $('transparencyVal');
+  if (slider) fill(slider);
+  if (valueLabel) valueLabel.textContent = value + '%';
+  if (S) S.dockTransparency = +value;
+  dockTransparencyPending = +value;
+  if (dockTransparencySending) return;
+  dockTransparencySending = true;
+  const send = async () => {
+    while (dockTransparencyPending !== null) {
+      const next = dockTransparencyPending;
+      dockTransparencyPending = null;
+      S = await mdSet('dockTransparency', next);
+    }
+    dockTransparencySending = false;
+  };
+  send();
 }
 slider('size', 'iconSize', v => v, v => setVal('sizeVal', v));
+slider('padding', 'appPadding', v => v, v => setVal('paddingVal', v));
 slider('per', 'perPage', v => v > 20 ? 0 : v, v => setVal('perVal', v > 20 ? 'All' : v));
 slider('anim', 'animSpeed', v => v, v => setVal('animVal', v));
 slider('mag', 'magnification', v => v < 108 ? 1 : v / 100, v => setVal('magVal', v < 108 ? 'Off' : v + '%'));
 // typing a number: Enter or clicking away applies it (clamped to the slider's range), Esc cancels
 typeable('sizeVal', 'size', 'iconSize', t => +t);
+typeable('paddingVal', 'padding', 'appPadding', t => +t);
 typeable('perVal', 'per', 'perPage', t => /^a/i.test(t) ? 21 : +t, v => v > 20 ? 0 : v);
 typeable('animVal', 'anim', 'animSpeed', t => +t);
 typeable('magVal', 'mag', 'magnification', t => /^o/i.test(t) ? 100 : +t.replace('%', ''), v => v < 108 ? 1 : v / 100);
 
 // ---- pages ----
 function head(title, back) {
+  if (FULL && isTop(page)) return `<div class="phead top"><h3>${esc(title)}</h3></div>`;
   return `<div class="phead"><button class="icon-btn" onclick="${back || 'closePage()'}" title="Back">${BACK}</button><h3>${esc(title)}</h3></div>`;
 }
-function choice(key, title) {
+function choice(key, title, back) {
   const opts = NAMES[key];
-  return head(title) + `<div class="list">` + Object.entries(opts).map(([v, n]) =>
+  return head(title, back) + `<div class="list">` + Object.entries(opts).map(([v, n]) =>
     `<button class="item ${S[key] === v ? 'sel' : ''}" onclick="set('${key}','${v}')">${esc(n)}</button>`).join('') + `</div>`;
+}
+
+function themeSeg() {
+  return `<div class="seg" role="radiogroup" aria-label="Light or dark">` + Object.entries(NAMES.theme).map(([v, n]) =>
+        `<button type="button" role="radio" aria-checked="${S.theme === v}" class="seg-opt ${S.theme === v ? 'sel' : ''}" onclick="set('theme','${v}')"><span class="swatch ${v}"><span></span></span><span>${esc(n)}</span></button>`).join('') + `</div>`;
+}
+function themeBody() {
+  let h = `<div class="card" style="margin-top:4px">` + pageRow('colours', 'colours', 'Colours', 'Dock colour, see-through, accent, and menus', S.dockColor === 'wallpaper' ? 'Wallpaper' : S.dockColor ? 'Custom' : NAMES.theme[S.theme]) + `</div>`;
+  h += `<div class="sec">Dock shape</div><div class="shape-options">` + Object.entries(NAMES.dockShape).map(([v, n]) =>
+        `<button type="button" class="shape-option ${S.dockShape === v ? 'sel' : ''}" aria-pressed="${S.dockShape === v}" onclick="set('dockShape','${v}')">
+          <span class="shape-name">${esc(n)}</span><span class="shape-preview ${v === 'pill' ? 'round' : 'square'}"><span></span><span></span><span></span></span><span class="check">${CHECK}</span></button>`).join('') + `</div>`;
+  return h;
+}
+
+
+// ---- Icons page: the Black and White Icons tiles (the accent colours their details) ----
+function iconColoursBody() {
+  let h = '';
+  // icon colours: the Black and White Icons tiles (the accent above colours their details)
+  const BW = 'Black and White Icons (Auto)', BL = 'White Icons (Light)', BD = 'Black Icons (Dark)', cur = S.iconPack || '';
+  const bwOn = [BW, BL, BD].includes(cur);
+  h += `<div class="sec">Icon colours</div><div class="seg" style="grid-template-columns:repeat(4,1fr);margin-bottom:10px" role="radiogroup" aria-label="Icon tiles">`
+    + [[BW, 'Auto', 'Follows light or dark'], [BL, 'Light tiles', 'Black lines'], [BD, 'Dark tiles', 'White lines'], ['', 'Original tiles', "The app's own colours"]].map(([v, n, d]) => {
+      const sel = v ? cur === v : !bwOn;
+      return `<button type="button" role="radio" aria-checked="${sel}" class="seg-opt ${sel ? 'sel' : ''}" onclick="set('iconPack', ${JSON.stringify(v).replace(/"/g, '&quot;')})"><span>${n}</span><small style="color:var(--dim)">${d}</small></button>`;
+    }).join('') + `</div>`;
+  if (!bwOn && cur) h += `<div class="hint" style="padding:6px 4px">Using the ${esc(cur)} pack. Pick Auto, Light or Dark tiles to switch to the built-in icons.</div>`;
+  return h;
+}
+// ---- Home: every section as a card, with what it's set to now ----
+function homeBody() {
+  const shapes = NAMES.iconStyle || {}, pos = NAMES.position || {};
+  const cards = [
+    ['colours', 'colours', 'Appearance', (NAMES.theme[S.theme] || '') + (S.dockColor === 'wallpaper' ? ' · wallpaper colours' : S.dockColor ? ' · custom colour' : '')],
+    ['icons', 'pack', 'Icons', (S.iconPack || 'App icons') + ' · ' + (shapes[S.iconStyle] || '')],
+    ['layout', 'pos', 'Dock', (pos[S.position] || 'Bottom') + ' · ' + S.iconSize + ' px' + (S.autoHide ? ' · auto-hide' : '')],
+    ['widgets', 'widgets', 'Widgets', S.widgetStyle === 'dg' ? 'DG style' : 'Windows style'],
+    ['launchpad', 'launch', 'Launchpad', S.winKey ? 'Windows key opens it' : 'Apps and search'],
+    ['system', 'displays', 'System', S.displayMode === 'each' ? 'A dock on each display' : S.displayMode === 'main' ? 'Main display' : 'Follows the pointer'],
+  ];
+  return head('DG-Dock settings') + `<div class="hgrid">` + cards.map(([k, ic, n, v]) =>
+    `<button type="button" class="hcard" onclick="openPage('${k}')">${settingIcon(ic)}<b>${esc(n)}</b><small>${esc(v)}</small></button>`).join('') + `</div>`
+    + `<div class="card" style="margin-top:12px">${toggleRow('lockDock', 'lock', S.lockDock ? 'Dock is locked' : 'Lock the dock', S.lockDock ? "Icons can't be moved or removed" : 'Stop icons being moved or removed')}</div>`;
+}
+// ---- Font: the list of installed fonts, each shown in itself ----
+let FONTS = null;
+async function loadFonts() {
+  if (!FONTS) FONTS = window.mdFonts ? await mdFonts() : [];
+  const sel = $('fontPick');
+  if (!sel) return;
+  sel.innerHTML = `<option value="">Segoe UI (default)</option>` + FONTS.map(f => `<option value="${esc(f)}" style="font-family:'${esc(f)}'" ${S.font === f ? 'selected' : ''}>${esc(f)}</option>`).join('');
+}
+// ---- Widget style ----
+// the dock's 5×7 dot-matrix digits, for the DG style preview
+const DOTS = { 0: [14,17,19,21,25,17,14], 1: [4,12,4,4,4,4,14], 4: [2,6,10,18,31,2,2], 7: [31,1,2,4,8,8,8] };
+function dotSvg(lines) {
+  const c = 3.4, W = 11 * c, H = (lines.length * 7 + 1.2) * c;
+  let dots = '';
+  lines.forEach((ln, li) => [...ln].forEach((ch, ci) => (DOTS[ch] || []).forEach((row, r) => {
+    for (let k = 0; k < 5; k++) if (row & (16 >> k)) dots += `<circle cx="${(ci * 6 + k + .5) * c}" cy="${(li * 8.2 + r + .5) * c}" r="${c * .44}"/>`;
+  })));
+  return `<svg width="${W + 8}" height="${H}" viewBox="0 0 ${W + 8} ${H}" aria-hidden="true"><g fill="currentColor">${dots}</g><circle cx="${W + 4}" cy="${7.6 * c}" r="${c * .5}" fill="var(--accent)"/></svg>`;
+}
+function widgetStyleSeg() {
+  const cur = S.widgetStyle || '';
+  const dg = `<span class="wsp">${dotSvg(['17', '47'])}</span>`, win = `<span class="wsp"><b>17:47</b><small>Fri 13 Nov</small></span>`;
+  return `<div class="sec" style="margin-top:4px">Widget style</div><div class="seg two" role="radiogroup" aria-label="Widget style">`
+    + [['', 'Windows style', 'Clear text and gauges', win], ['dg', 'DG style', 'Dot-matrix numbers in your accent', dg]].map(([v, n, d, pv]) =>
+      `<button type="button" role="radio" aria-checked="${cur === v}" class="seg-opt ${cur === v ? 'sel' : ''}" onclick="set('widgetStyle','${v}')">${pv}<span>${n}</span><small style="color:var(--dim)">${d}</small></button>`).join('') + `</div>`
+    + (S.iconStyle === 'circle' ? `<div class="sec">Round clock</div><div class="seg two" role="radiogroup" aria-label="Round clock">` + [['', 'Hands', 'An analogue clock face'], ['digital', 'Digital', 'The time in numbers']].map(([v, n, d]) => {
+      const sel = (S.clockFace || '') === v;
+      return `<button type="button" role="radio" aria-checked="${sel}" class="seg-opt ${sel ? 'sel' : ''}" onclick="set('clockFace','${v}')"><span>${n}</span><small style="color:var(--dim)">${d}</small></button>`;
+    }).join('') + `</div>` : '');
+}
+
+// ---- Weather ----
+const HOUSE_NO = /^\s*(?:(?:flat|apt|apartment|unit|no\.?)\s*)?\d+[a-z]?(?:\s*[-/]\s*\d+[a-z]?)?\s*,?\s+/i;
+function stripHouseNo(v) { v = v.trim(); for (let i = 0; i < 3 && HOUSE_NO.test(v); i++) v = v.replace(HOUSE_NO, '').trim(); return v; }
+function weatherBody() {
+  const home = S.weatherLoc === 'home';
+  let h = head('Weather', "openPage('widgets', true)");
+  h += `<div class="card"><div class="wx-status"><span>${esc(S.weatherStatus || (S.weatherOn ? 'Getting the weather…' : 'The weather widget is off. Turn it on in Widgets.'))}</span>`
+    + `<button type="button" class="link" onclick="set('weatherRefresh', true)">Refresh</button></div>`
+    + (!home && S.weatherApprox ? `<div class="hint">Turn on location for desktop apps in Windows Settings for your exact location. <button type="button" class="link" onclick="mdOpenLocationSettings()">Location settings</button></div>` : '')
+    + `</div>`;
+  h += `<div class="sec">Location</div><div class="seg two" role="radiogroup" aria-label="Weather location">`
+    + [['', "This PC's location", 'Uses Windows location'], ['home', 'Home address', 'Street, town and postcode']].map(([v, n, d]) =>
+      `<button type="button" role="radio" aria-checked="${(S.weatherLoc || '') === v}" class="seg-opt ${(S.weatherLoc || '') === v ? 'sel' : ''}" onclick="set('weatherLoc','${v}')"><span>${n}</span><small style="color:var(--dim)">${d}</small></button>`).join('') + `</div>`;
+  if (home) {
+    h += `<div class="card" style="margin-top:8px"><div class="wx-form">`
+      + (S.weatherPlace ? `<div class="wx-msg ok">Showing the weather for ${esc(S.weatherPlace)}</div>` : '')
+      + `<label>Street<small>No house number needed: it's left out if you type one</small><input id="wxStreet" autocomplete="off" spellcheck="false" placeholder="Baker Street" value="${esc(S.weatherStreet || '')}"></label>`
+      + `<div class="row2"><label>Town or city<input id="wxTown" autocomplete="off" spellcheck="false" placeholder="London" value="${esc(S.weatherTown || '')}"></label>`
+      + `<label>Postcode<input id="wxPostcode" autocomplete="off" spellcheck="false" placeholder="NW1" value="${esc(S.weatherPostcode || '')}"></label></div>`
+      + `<label>Country<small>Optional</small><input id="wxCountry" autocomplete="off" spellcheck="false" placeholder="United Kingdom" value="${esc(S.weatherCountry || '')}"></label>`
+      + `<div class="acts"><button type="button" class="wx-save" id="wxSave" onclick="saveWeatherHome()">Save address</button><span class="wx-msg" id="wxMsg" aria-live="polite"></span></div>`
+      + `</div></div>`;
+  }
+  const auto = S.weatherAutoF ? '°F' : '°C';
+  h += `<div class="sec">Units</div><div class="seg three" role="radiogroup" aria-label="Temperature units">`
+    + [['', `Automatic (${auto})`], ['c', 'Celsius (°C)'], ['f', 'Fahrenheit (°F)']].map(([v, n]) =>
+      `<button type="button" role="radio" aria-checked="${(S.weatherUnits || '') === v}" class="seg-opt ${(S.weatherUnits || '') === v ? 'sel' : ''}" onclick="set('weatherUnits','${v}')"><span>${n}</span></button>`).join('') + `</div>`;
+  h += `<div class="muted" style="margin:12px 2px 0;font-size:11.5px;line-height:1.5">Your location is only used to get the forecast from Open-Meteo. A home address is looked up once with OpenStreetMap, without a house number, and then kept on this PC.</div>`;
+  return h;
+}
+async function saveWeatherHome() {
+  const st = $('wxStreet'), msg = $('wxMsg');
+  const street = stripHouseNo(st.value);
+  if (street !== st.value.trim()) st.value = street;
+  const town = $('wxTown').value.trim(), postcode = $('wxPostcode').value.trim();
+  if (!town && !postcode) { msg.textContent = 'Enter a town or a postcode'; msg.className = 'wx-msg err'; $('wxTown').focus(); return; }
+  msg.textContent = 'Checking the address…'; msg.className = 'wx-msg';
+  $('wxSave').disabled = true;
+  await mdWeatherHome(street, town, postcode, $('wxCountry').value.trim());
+}
+window.mdWeatherSaved = r => {
+  const m = $('wxMsg'), b = $('wxSave');
+  if (b) b.disabled = false;
+  if (!m) return;
+  m.textContent = r.ok ? 'Saved: ' + r.place : r.error;
+  m.className = 'wx-msg ' + (r.ok ? 'ok' : 'err');
+};
+
+// ---- Colours ----
+const DOCK_COLOURS = [['#2b2b2e', 'Graphite'], ['#1f2a44', 'Midnight'], ['#3a6ad8', 'Blue'], ['#2e8b6e', 'Teal'], ['#2f5d3a', 'Forest'],
+  ['#6a3d8f', 'Plum'], ['#c0446a', 'Rose'], ['#b5651d', 'Amber'], ['#d8c7a8', 'Sand'], ['#f2f2f4', 'White']];
+const ACCENTS = [['#3a6ad8', 'Blue'], ['#4cc2ff', 'Sky'], ['#ff7a3d', 'Orange'], ['#ffc83d', 'Yellow'], ['#2fbf71', 'Green'], ['#9b6bff', 'Purple'], ['#ff5c8a', 'Pink']];
+let WALL = null; // the wallpaper's colours, main colour first
+async function loadWall() {
+  if (!window.mdWallColours) return;
+  const w = (await mdWallColours()) || [];
+  if (JSON.stringify(w) !== JSON.stringify(WALL)) { WALL = w; if (page === 'colours') renderPage(); }
+}
+const wallGrad = () => WALL && WALL.length ? `conic-gradient(${WALL.map((c, i) => `${c} ${i / WALL.length * 100}% ${(i + 1) / WALL.length * 100}%`).join(', ')})` : '';
+function wallRow(key, cur, label) {
+  if (!WALL) return `<div class="cs-row cs-wall"><span class="cs-label">From your wallpaper…</span></div>`;
+  if (!WALL.length) return `<div class="cs-row cs-wall"><span class="cs-label">Couldn't read your wallpaper's colours</span></div>`;
+  return `<div class="cs-row cs-wall"><span class="cs-label">From your wallpaper</span>`
+    + `<button type="button" class="cs wp ${cur === 'wallpaper' ? 'sel' : ''}" style="--wp:${wallGrad()}" title="${esc(label)}: changes with your wallpaper" aria-label="${esc(label)}" aria-pressed="${cur === 'wallpaper'}" onclick="set('${key}','wallpaper')"></button><span class="cs-name">${esc(label)}</span><span class="cs-sep"></span>`
+    + WALL.map((c, i) => swatch(key, c, i === 0 ? 'Main wallpaper colour' : 'Wallpaper colour', cur)).join('') + `</div>`;
+}
+const swatch = (key, v, name, cur, extra = '') =>
+  `<button type="button" class="cs ${extra} ${cur === v ? 'sel' : ''}" style="--c:${v || 'transparent'}" title="${esc(name)}" aria-label="${esc(name)}" aria-pressed="${cur === v}" onclick="set('${key}','${v}')"></button>`;
+const customSwatch = (key, cur, presets) => {
+  const custom = cur && cur !== 'dock' && cur !== 'wallpaper' && !presets.some(p => p[0] === cur) && !(WALL || []).includes(cur);
+  return `<span class="cs rain ${custom ? 'sel' : ''}" title="Custom colour" ${custom ? `style="--bg:${cur}"` : ''}><input type="color" aria-label="Custom colour" value="${custom ? cur : '#7a5cff'}" onchange="set('${key}', this.value)"></span>`;
+};
+function coloursBody() {
+  const dc = S.dockColor || '', ac = S.accentColor || '';
+  const fill = S.dockFill || '#141416', strength = 100 - (S.dockTransparency || 0);
+  let h = head('Appearance');
+  const wbg = WALL && WALL.length > 1 ? `style="background:linear-gradient(135deg, ${WALL.slice(0, 4).join(', ')})"` : '';
+  h += `<div class="cpv" ${wbg}><div class="cpv-dock" id="cpvDock" style="background:${hexA(fill, strength / 100 * 0.98)}">
+    <span style="background:#e8e8ea"></span><span style="background:#ff8a4c"></span><i style="background:${S.accentNow}"></i><span style="background:#5fc3ff"></span><i style="background:${S.accentNow}"></i><span style="background:#9be37a"></span>${previewWidget()}</div></div>`;
+  h += `<div class="sec">Light or dark</div>` + themeSeg();
+  h += `<div class="sec">Dock colour</div><div class="card"><div class="cs-row">`
+    + `<button type="button" class="cs def ${!dc ? 'sel' : ''}" title="Theme colour (follows light or dark)" aria-label="Theme colour" aria-pressed="${!dc}" onclick="set('dockColor','')"></button><span class="cs-sep"></span>`
+    + DOCK_COLOURS.map(([v, n]) => swatch('dockColor', v, n, dc)).join('') + customSwatch('dockColor', dc, DOCK_COLOURS)
+    + `</div>` + wallRow('dockColor', dc, 'Match wallpaper') + `</div>`;
+  // widget colour: all widgets at once, or one widget at a time (chips choose which)
+  const names = S.widgetNames || [], fills = S.widgetFills || {}, own = S.widgetColors || {};
+  if (WSEL && !names.some(n => n[0] === WSEL)) WSEL = '';
+  const wc = WSEL ? (own[WSEL] || '') : (S.widgetColor || '');
+  const dot = c => `<i style="background:${c || hexA(S.dockFill || '#141416', 1)}"></i>`;
+  h += `<div class="sec">Widget colour</div><div class="card"><div class="wsel" role="tablist" aria-label="Which widgets">`
+    + `<button type="button" role="tab" aria-selected="${!WSEL}" class="${!WSEL ? 'sel' : ''}" onclick="WSEL='';renderPage()">${dot(S.widgetFill)}All widgets</button>`
+    + names.map(([k, n]) => `<button type="button" role="tab" aria-selected="${WSEL === k}" class="${WSEL === k ? 'sel' : ''}" onclick="WSEL='${k}';renderPage()">${dot(fills[k])}${esc(n)}${own[k] ? '<b>·&nbsp;own</b>' : ''}</button>`).join('')
+    + `</div><div class="cs-row">`;
+  if (WSEL) {
+    const same = !wc;
+    h += `<button type="button" class="cs ${same ? 'sel' : ''}" style="--c:${S.widgetFill || S.dockFill || '#141416'}" title="Same as all widgets" aria-label="Same as all widgets" aria-pressed="${same}" onclick="set('wc','')"></button><span class="cs-name">Same as all</span><span class="cs-sep"></span>`
+      + `<button type="button" class="cs ${wc === 'dock' ? 'sel' : ''}" style="--c:${S.dockFill || '#141416'}" title="Match dock: a soft tint of the dock" aria-label="Match dock" aria-pressed="${wc === 'dock'}" onclick="set('wc','dock')"></button><span class="cs-name">Match dock</span><span class="cs-sep"></span>`;
+  } else {
+    h += `<button type="button" class="cs ${!wc ? 'sel' : ''}" style="--c:${S.dockFill || '#141416'}" title="Match dock: a soft tint of the dock" aria-label="Match dock" aria-pressed="${!wc}" onclick="set('wc','')"></button><span class="cs-name">Match dock</span><span class="cs-sep"></span>`;
+  }
+  h += DOCK_COLOURS.map(([v, n]) => swatch('wc', v, n, wc)).join('') + customSwatch('wc', wc === 'dock' ? '' : wc, DOCK_COLOURS)
+    + `</div>` + wallRow('wc', wc, 'Match wallpaper') + `</div>`;
+  h += `<div class="sec">Colour strength</div><div class="card strength">
+    <input type="range" id="strength" min="0" max="100" step="1" value="${strength}" aria-label="Colour strength: clear to solid">
+    <div class="ends"><span>Clear</span><span id="strengthVal">${strength}%</span><span>Solid</span></div></div>`;
+  h += `<div class="sec">Accent</div><div class="card"><div class="cs-row">`
+    + `<button type="button" class="cs ${!ac ? 'sel' : ''}" style="--c:${S.winAccent}" title="Windows accent" aria-label="Windows accent" aria-pressed="${!ac}" onclick="set('accentColor','')"></button><span class="cs-name">Windows</span>`
+    + (dc ? `<span class="cs-sep"></span><button type="button" class="cs ${ac === 'dock' ? 'sel' : ''}" style="--c:${S.accentNow && ac === 'dock' ? S.accentNow : S.dockFill}" title="Match dock" aria-label="Match the dock colour" aria-pressed="${ac === 'dock'}" onclick="set('accentColor','dock')"></button><span class="cs-name">Match dock</span>` : '')
+    + `<span class="cs-sep"></span>` + ACCENTS.map(([v, n]) => swatch('accentColor', v, n, ac)).join('') + customSwatch('accentColor', ac, ACCENTS)
+    + `</div>` + wallRow('accentColor', ac, 'Match wallpaper') + `</div>`;
+  h += `<div class="sec">Menus and panels</div>`;
+  if (dc) {
+    h += `<div class="seg two" role="radiogroup" aria-label="Menus and panels">`
+      + [[false, 'Standard', 'Light or dark, as above'], [true, 'Match dock', 'Use the dock colour']].map(([v, n, d]) =>
+        `<button type="button" role="radio" aria-checked="${!!S.menuTint === v}" class="seg-opt ${!!S.menuTint === v ? 'sel' : ''}" onclick="set('menuTint', ${v})"><span>${n}</span><small style="color:var(--dim)">${d}</small></button>`).join('') + `</div>`;
+  } else {
+    h += `<div class="card"><div class="hint" style="padding:12px 14px">Right-click menus, Launchpad, and Settings follow Light or dark. Pick a dock colour to match them to it.</div></div>`;
+  }
+  h += `<div class="sec">Font</div><div class="card"><div class="lrow">${settingIcon('style')}<span class="t">Font<small>Any font installed in Windows: dock, menus, Settings and Launchpad</small></span>
+    <select id="fontPick" class="fontpick" aria-label="Font" onchange="set('font', this.value)"><option value="">Segoe UI (default)</option>${S.font ? `<option value="${esc(S.font)}" selected>${esc(S.font)}</option>` : ''}</select></div></div>`;
+  h += `<div class="sec">Dock shape</div><div class="shape-options">` + Object.entries(NAMES.dockShape).map(([v, n]) =>
+        `<button type="button" class="shape-option ${S.dockShape === v ? 'sel' : ''}" aria-pressed="${S.dockShape === v}" onclick="set('dockShape','${v}')">
+          <span class="shape-name">${esc(n)}</span><span class="shape-preview ${v === 'pill' ? 'round' : 'square'}"><span></span><span></span><span></span></span><span class="check">${CHECK}</span></button>`).join('') + `</div>`;
+  return h;
+}
+// the clock widget in the preview: its own colour, or the dock's soft tint
+function previewWidget() {
+  const lum = h => { const n = parseInt(h.slice(1), 16); return .299 * (n >> 16 & 255) + .587 * (n >> 8 & 255) + .114 * (n & 255); };
+  const strength = 1 - (S.dockTransparency || 0) / 100;
+  let bg, fg;
+  const fill = WSEL ? (S.widgetFills || {})[WSEL] : (S.widgetFills || {}).clock ?? S.widgetFill;
+  if (fill) { bg = hexA(fill, .95 * (1 - .8 * (1 - strength))); fg = darkText(fill) ? '#19191e' : '#f5f5f8'; }
+  else { // Match dock: the dock colour, lighter or darker by Light or dark (as the dock draws it)
+    const dark = S.dark, n = parseInt((S.dockFill || '#141416').slice(1), 16), t = dark ? 0 : 255, k = dark ? .38 : .62;
+    const m = v => Math.round(v * (1 - k) + t * k), hx = '#' + [n >> 16 & 255, n >> 8 & 255, n & 255].map(v => m(v).toString(16).padStart(2, '0')).join('');
+    bg = hexA(hx, .95 * (1 - .8 * (1 - strength))); fg = dark ? '#f5f5f8' : '#19191e';
+  }
+  return `<b id="cpvWidget" style="background:${bg};color:${fg}">18:21<small>Fri 13 Nov</small></b>`;
+}
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a.toFixed(3)})`;
+}
+function wireStrength() {
+  const sl = $('strength'); if (!sl) return;
+  const paint = () => {
+    const v = +sl.value, f = S.dockFill || '#141416';
+    sl.style.setProperty('--sg', `linear-gradient(90deg, ${hexA(f, 0)}, ${f})`);
+    $('strengthVal').textContent = v + '%';
+    const d = $('cpvDock'); if (d) d.style.background = hexA(f, v / 100 * 0.98);
+    S.dockTransparency = 100 - v; const w = $('cpvWidget'); if (w) w.outerHTML = previewWidget();
+    S.uiAlpha = 0.4 + 0.6 * v / 100; paintPanel();
+  };
+  paint();
+  sl.addEventListener('input', () => { paint(); queueDockTransparency(100 - +sl.value); });
 }
 
 async function renderPage(dir) {
   const p = $('page');
+  parkControls();
   let h = '';
   switch (page) {
-    case 'style': h = choice('style', 'Dock style'); break;
-    case 'position': h = choice('position', 'Position on screen'); break;
-    case 'theme': h = choice('theme', 'Appearance'); break;
-    case 'iconStyle': h = choice('iconStyle', 'Icon style'); break;
-    case 'pack':
-      h = head('Icon pack') + `<div class="list">` +
-        [['', 'None']].concat((S.packs || []).map(x => [x, x])).map(([v, n]) =>
-          `<button class="item ${S.iconPack === v ? 'sel' : ''}" onclick="set('iconPack', ${JSON.stringify(v).replace(/"/g, '&quot;')})">${esc(n)}</button>`).join('') +
-        `</div><div class="pfoot"><button class="link" onclick="mdPick('pack', -1)">Import an Android icon pack (.apk)…</button></div>`;
+    case 'appearance': case 'layout': case 'appsIcons': case 'behaviour': case 'system': case 'launchpad': case 'lpIcons': case 'lpTabs': case 'pillOrder': case 'animations':
+      h = renderCategory(page); break;
+    case 'position': h = choice('position', 'Position on screen', "openPage('layout', true)"); break;
+    case 'search': h = searchResults($('sideQuery') ? $('sideQuery').value : ''); break;
+    case 'home':
+      h = homeBody(); break;
+    case 'icons': {
+      h = head('Icons');
+      h += `<div class="sec" style="margin-top:4px">Icon shape</div>` + qseg('iconStyle', Object.entries(NAMES.iconStyle));
+      h += iconColoursBody();
+      h += `<div class="card" style="padding:0;margin-top:12px">` + pageRow('pack', 'tiles', 'Icon pack and artwork', 'Icon packs, widget artwork, and icon sizes', S.iconPack || 'None')
+        + actionRow('dock', 'brush', 'Edit dock items and icons', 'Reorder, remove, or change any icon') + actionRow('apps', 'search', 'Add apps', 'Find installed apps to pin') + `</div>`;
       break;
+    }
+    case 'colours':
+      h = coloursBody(); break;
+    case 'look':
+      h = head('Look') + themeBody();
+      h += `<div class="sec">Icon style</div>` + qseg('iconStyle', Object.entries(NAMES.iconStyle));
+      h += `<div class="sec">Icons</div><div class="card">` + pageRow('pack', 'tiles', 'Icon pack and artwork', 'Icon packs, custom widget artwork and icon sizes', S.iconPack || 'None') + `</div>`;
+      break;
+    case 'theme':
+      h = head('Theme', "openPage('colours', true)") + themeBody();
+      break;
+    case 'iconStyle': h = choice('iconStyle', 'Icon style', "openPage('icons', true)"); break;
+    case 'pack': {
+      const mediaIcon = await mdMediaWidgetIcon();
+      const trayIcon = await mdTrayWidgetIcon();
+      h = head('Icon pack', "openPage('icons', true)") + `<div class="list"><button class="item ${S.iconPack === '' ? 'sel' : ''}" onclick="set('iconPack','')">None</button>` +
+        (S.packs || []).map(x => `<div class="pack-row"><button class="item ${S.iconPack === x ? 'sel' : ''}" onclick="set('iconPack', ${JSON.stringify(x).replace(/"/g, '&quot;')})">${esc(x)}</button>
+          ${(S.builtinPacks || []).includes(x) ? `<span class="pack-lock" title="Comes with DG-Dock" aria-label="${esc(x)} comes with DG-Dock and can't be removed">${svg(I.lock)}</span>`
+            : `<button class="icon-btn sm remove-pack" aria-label="Remove ${esc(x)} icon pack" title="Remove icon pack" onclick="removePack(${JSON.stringify(x).replace(/"/g, '&quot;')})">${svg('<path d="M3 4.5h10l-.7 9H3.7zM2 4.5h12M6 2.5h4M6.5 7v4M9.5 7v4"/>')}</button>`}</div>`).join('') +
+        `</div><div class="sec">Now Playing icon</div><div class="card"><div class="pack-art">
+          ${mediaIcon ? `<img src="${mediaIcon}" alt="Now Playing fallback artwork">` : `<span class="glyph" aria-hidden="true">${svg('<path d="M6 11.5V4l6-1.5v7.5"/><circle cx="4.5" cy="11.5" r="1.5"/><circle cx="10.5" cy="10" r="1.5"/>')}</span>`}
+          <div class="t">${S.mediaWidgetIcon ? 'Custom default artwork' : 'Default music note'}<small>Shown when there is no album artwork.</small></div>
+        </div><div class="pack-art-actions">
+          ${S.iconPack ? `<button class="pill" onclick="pickMediaPackIcon()">From ${esc(S.iconPack)}…</button>` : ''}
+          <button class="pill" onclick="mdPick('mediaIcon', -1)">Choose image…</button>
+          ${S.mediaWidgetIcon ? `<button class="pill off" onclick="mdResetMediaIcon().then(async()=>{S=await mdState();apply();renderPage()})">Reset</button>` : ''}
+        </div></div><div class="sec">System tray icon</div><div class="card"><div class="pack-art">
+          ${trayIcon ? `<img src="${trayIcon}" alt="System tray widget icon">` : `<span class="glyph" aria-hidden="true">${svg('<path d="M3.5 10 8 5.5l4.5 4.5"/>')}</span>`}
+          <div class="t">${S.trayWidgetIcon ? 'Custom system tray icon' : 'Default system tray icon'}<small>Shown on the dock’s System tray widget.</small></div>
+        </div><div class="pack-art-actions">
+          ${S.iconPack ? `<button class="pill" onclick="pickPackIconFor('widget:tray','System tray')">From ${esc(S.iconPack)}…</button>` : ''}
+          <button class="pill" onclick="mdPick('trayIcon', -1)">Choose image…</button>
+          ${S.trayWidgetIcon ? `<button class="pill off" onclick="mdResetKeyIcon('widget:tray').then(async()=>{S=await mdState();apply();renderPage()})">Reset</button>` : ''}
+        </div></div><div class="sec pack-scale">App icon size</div><div class="card sliders"><div class="srow pack-scale-row" title="Scale complete app icons inside their dock slots">
+          <label class="alpha-label" for="appIconScale">Icon size</label><input type="range" id="appIconScale" min="0" max="150" step="1" aria-label="App icon size scale">
+          <div class="pack-scale-value"><input class="val" id="appIconScaleVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off" aria-label="App icon size percentage"><span>%</span></div>
+        </div><div class="alpha-help">Scale the full app icon tile inside its slot · 0–150%. Dock and widget sizes stay fixed.</div></div>
+        <div class="sec pack-scale">Widget icon size</div><div class="card sliders"><div class="srow pack-scale-row" title="Scale custom artwork inside the widget masks">
+          <label class="alpha-label" for="widgetScale">Icon size</label><input type="range" id="widgetScale" min="0" max="150" step="1" aria-label="Widget artwork scale">
+          <div class="pack-scale-value"><input class="val" id="widgetScaleVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off" aria-label="Widget artwork scale percentage"><span>%</span></div>
+        </div><div class="alpha-help">Adjust custom Now Playing and System tray artwork · 0–150%</div></div>${S.iconPack ? `<div class="sec pack-scale">Icon pack icon size</div><div class="card sliders"><div class="srow pack-scale-row" title="Scale icons from the selected icon pack">
+          <label class="alpha-label" for="packScale">Icon size</label><input type="range" id="packScale" min="0" max="150" step="1" aria-label="Icon pack artwork scale">
+          <div class="pack-scale-value"><input class="val" id="packScaleVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off" aria-label="Icon pack artwork scale percentage"><span>%</span></div>
+        </div><div class="alpha-help">Adjust pack icons to fit inside their dock slots · 0–150%</div></div>` : ''}
+        <div class="pfoot"><button class="link" onclick="mdPick('pack', -1)">Import an Android icon pack (.apk)…</button></div>`;
+      break;
+    }
     case 'about': {
       const A = await mdAbout();
       h = head('About') + `<div class="about">
         <div class="card big"><div class="logo"></div><div><h4>DG-Dock ${esc(A.name)}</h4>
           <div class="muted">Build ${esc(A.build)} · © 2026 Dippy_drippy</div>
           <div class="muted">Free to use. Not to be sold or shared elsewhere.</div></div></div>
-        ${A.donate || A.home ? `<div class="btnrow">${A.donate ? `<button class="pill" onclick="mdOpenLink('donate')">♥ Support DG-Dock</button>` : ''}
-          ${A.home ? `<button class="pill" style="background:var(--tile);color:var(--text)" onclick="mdOpenLink('home')">Official page</button>` : ''}</div>` : ''}
+        ${A.donate || A.home ? `<div class="btnrow">${A.donate ? `<button class="pill primary" onclick="mdOpenLink('donate')">♥ Support DG-Dock</button>` : ''}
+          ${A.home ? `<button class="pill" onclick="mdOpenLink('home')">Official page</button>` : ''}</div>` : ''}
+        <div class="sec">Your setup</div><div class="card" style="padding:0">
+          <button class="lrow category-row" onclick="mdBackup()"><span class="t">Save my setup…<small>Pins, settings, icon packs, your icons and Launchpad folders in one file</small></span><span class="v">${CHEV}</span></button>
+          <button class="lrow category-row" onclick="mdRestore()"><span class="t">Restore a setup…<small>Replaces what you have now. DG-Dock restarts by itself</small></span><span class="v">${CHEV}</span></button>
+        </div>
         <div class="card"><div class="muted" style="margin-bottom:6px;font-weight:600">DG-Dock Licence</div><pre>${esc(reflowLic(A.licence))}</pre></div>
         <div class="card"><div class="muted" style="margin-bottom:6px;font-weight:600">Open-source components</div><pre>${esc(A.notices)}</pre></div>
       </div>`;
@@ -495,7 +1427,10 @@ async function renderPage(dir) {
     }
     case 'dock':
       ITEMS = await mdDockItems();
-      h = head('Edit Dock') + `<div class="list scroll" id="dockList">` + ITEMS.map(it => `
+      if (S.lockDock) ITEMS = ITEMS.map(it => ({ ...it, movable: false, removable: false }));
+      h = head('Dock items and icons', "openPage('icons', true)")
+        + `<div class="card" style="padding:0;margin-bottom:10px">${pageRow('pack', 'tiles', 'Icon pack and artwork', 'Icon packs, widget artwork and icon size', S.iconPack || 'None')}</div>`
+        + (S.lockDock ? `<div class="lockbar">${svg(I.lock)}<span><b>The dock is locked.</b> Icons can't be moved or removed.</span><button class="pill" onclick="set('lockDock', false)">Unlock</button></div>` : '') + `<div class="list scroll" id="dockList">` + ITEMS.map(it => `
         <div class="item${it.movable ? ' mov' : ''}" data-idx="${it.idx}" data-sec="${it.section}">
           ${it.movable ? `<button class="num" title="Click to type a new position">0</button>` : `<span class="num fixed" title="Always here">${svg('<path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2M4 7h8v6H4z"/>')}</span>`}
           <img ${it.icon ? `src="${it.icon}"` : `src="${BLANK}" class="ph none"`}><span class="n">${esc(it.name)}</span><span class="acts">
@@ -504,25 +1439,97 @@ async function renderPage(dir) {
           ${it.removable ? `<button class="icon-btn sm" title="Remove from Dock" onclick="removePin(${it.idx})">${svg('<path d="M4 4l8 8M12 4l-8 8"/>')}</button>` : ''}
           ${it.movable ? `<span class="grip" title="Drag to move">${GRIP}</span>` : ''}
         </span></div>`).join('') + `</div>
-        <div class="pfoot"><button class="link" onclick="openPage('apps')">Add apps…</button>
+        <div class="pfoot"><button class="link" onclick="openApps('dock')">Add apps…</button>
         <button class="link" onclick="mdPick('folder', -1)">Add folder…</button>
-        <button class="link" onclick="mdPick('file', -1)">Add program or file…</button></div>`;
+        <button class="link" onclick="mdPick('file', -1)">Add program or file…</button>
+        ${ITEMS.some(it => it.kindLabel === 'Recycle Bin') ? '' : `<button class="link" onclick="mdAddTrash().then(() => renderPage())">Add Recycle Bin</button>`}
+        <button class="link" onclick="openPage('widgets')">Arrange widgets…</button></div>`;
+      break;
+    case 'widgets': {
+      const ws = await mdWidgetItems();
+      h = head('Widgets', "openPage('appearance', true)") + widgetStyleSeg() + `<div class="sec">Your widgets</div><div class="list scroll">` + ws.map(w => `
+        <div class="item">
+          <span class="reorder">
+            <button title="Move earlier" aria-label="Move ${esc(w.name)} earlier" onclick="moveWidget('${w.key}', -1)" ${w.order === 0 ? 'disabled' : ''}>${svg('<path d="M4.5 9.5 8 6l3.5 3.5"/>')}</button>
+            <button title="Move later" aria-label="Move ${esc(w.name)} later" onclick="moveWidget('${w.key}', 1)" ${w.order === ws.length - 1 ? 'disabled' : ''}>${svg('<path d="M4.5 6.5 8 10l3.5-3.5"/>')}</button>
+          </span>
+          <span class="n${w.enabled ? '' : ' dim'}">${esc(w.name)}</span>
+          <span class="acts">
+            <button class="position-btn" ${w.enabled ? '' : 'disabled'} aria-label="${esc(w.name)} position: ${esc(w.position)}" aria-haspopup="listbox" aria-expanded="false" onclick="openWidgetPosition(event, '${w.key}', ${w.enabled}, '${w.position}')">${esc(w.position[0].toUpperCase() + w.position.slice(1))}<span class="chev">⌄</span></button>
+            <button class="sw-btn" role="switch" aria-checked="${w.enabled}" aria-label="Show ${esc(w.name)}" onclick="setWidget('${w.key}', ${!w.enabled}, '${w.position}', -1)"><span class="sw ${w.enabled ? 'on' : ''}"></span></button>
+          </span>
+        </div>`).join('') + `</div><div class="sec">Widget size and spacing</div><div class="card sliders"><div class="srow pack-scale-row" title="Set the gap between widget tiles">
+          <label class="alpha-label" for="widgetGap">Gap</label><input type="range" id="widgetGap" min="0" max="20" step="1" aria-label="Widget spacing">
+          <div class="pack-scale-value"><input class="val" id="widgetGapVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off" aria-label="Widget spacing in pixels"><span>px</span></div><button type="button" class="rst" title="Back to the default spacing" aria-label="Reset spacing" onclick="set('widgetSpacing', 0)">${svg('<path d="M3 8a5 5 0 1 0 1.5-3.5M3 2.5v3h3"/>')}</button>
+        </div><div class="srow pack-scale-row" title="Make widgets narrower or wider">
+          <label class="alpha-label" for="widgetSize">Size</label><input type="range" id="widgetSize" min="60" max="160" step="5" aria-label="Widget size">
+          <div class="pack-scale-value"><input class="val" id="widgetSizeVal" type="text" inputmode="numeric" spellcheck="false" autocomplete="off" aria-label="Widget size in percent"><span>%</span></div><button type="button" class="rst" title="Back to normal size" aria-label="Reset size" onclick="set('widgetSize', 100)">${svg('<path d="M3 8a5 5 0 1 0 1.5-3.5M3 2.5v3h3"/>')}</button>
+        </div><div class="alpha-help">Gap: the space between widgets · 0–20 px. Size: how wide widgets are · 60–160%. Their height follows Icon size.</div></div>
+        <div class="sec">Weather</div><div class="card" style="padding:0">${pageRow('weather', 'weather', 'Weather', 'Location and units', S.weatherLoc === 'home' ? 'Home address' : "This PC's location")}</div>
+        <div class="pfoot"><span class="muted">Drag a widget along the dock to place it anywhere. Use Position to return it to Left, Middle or Right.</span></div>`;
+      break;
+    }
+    case 'weather':
+      h = weatherBody();
       break;
     case 'apps':
-      h = head('Add apps', "openPage('dock', true)") + `<div class="search">${SRCH}<input id="q" placeholder="Search apps" spellcheck="false"></div>
+      h = head('Add apps', `openPage('${appsReturnPage}', true)`) + `<div class="search">${SRCH}<input id="q" placeholder="Search apps" spellcheck="false"></div>
         <div class="list scroll" id="apps"><div class="empty">Loading…</div></div>`;
       break;
     case 'picker':
       const it = ITEMS.find(x => x.idx === pickIdx);
       const ttl = pickKey ? 'Icon for ' + pickName : it ? 'Icon for ' + it.name : 'Choose an icon';
-      h = head(ttl, pickKey ? "closePage()" : "openPage('dock', true)") + `<div class="search">${SRCH}<input id="q" placeholder="Search icons" spellcheck="false"></div>
+      h = head(ttl, pickKey ? "cancelIconPicker()" : "openPage('dock', true)") + `<div class="search">${SRCH}<input id="q" placeholder="Search icons" spellcheck="false"></div>
         <div class="grid scroll" id="grid"></div>
-        <div class="pfoot"><button class="link" onclick="pickFile()">Choose from a file…</button>
+        <div class="pfoot"><button class="link" onclick="mdOpenIconsFolder()">Open my icons folder</button><button class="link" onclick="pickFile()">From a file…</button>
         <button class="link" onclick="useOriginal()">Use original</button></div>`;
       break;
   }
   const keep = $('q') && $('q').value;
   p.innerHTML = h;
+  if (FULL && page !== 'search') {
+    const own = ownerOf(page);
+    document.querySelectorAll('#side .si').forEach(b => b.classList.toggle('on', (b.getAttribute('onclick') || '').includes(`'${own}'`)));
+  }
+  if (page === 'layout') $('layoutControlSlot').appendChild($('layoutControls'));
+  if (page === 'animations') $('animSpeedSlot').appendChild($('behaviorControls'));
+  if (page === 'colours') { wireStrength(); if (!WALL) loadWall(); loadFonts(); }
+  if (page === 'pack') {
+    const appIconScale = $('appIconScale');
+    appIconScale.value = Number.isFinite(S.appIconScale) ? S.appIconScale : 100;
+    fill(appIconScale);
+    $('appIconScaleVal').value = appIconScale.value;
+    slider('appIconScale', 'appIconScale', v => v, v => setVal('appIconScaleVal', v));
+    typeable('appIconScaleVal', 'appIconScale', 'appIconScale', t => +t);
+    const widgetScale = $('widgetScale');
+    widgetScale.value = Number.isFinite(S.widgetIconScale) ? S.widgetIconScale : 100;
+    fill(widgetScale);
+    $('widgetScaleVal').value = widgetScale.value;
+    slider('widgetScale', 'widgetIconScale', v => v, v => setVal('widgetScaleVal', v));
+    typeable('widgetScaleVal', 'widgetScale', 'widgetIconScale', t => +t);
+  }
+  if (page === 'widgets') {
+    const gap = $('widgetGap');
+    gap.value = Number.isFinite(S.widgetSpacing) ? S.widgetSpacing : 0;
+    fill(gap);
+    $('widgetGapVal').value = gap.value;
+    slider('widgetGap', 'widgetSpacing', v => v, v => setVal('widgetGapVal', v));
+    typeable('widgetGapVal', 'widgetGap', 'widgetSpacing', t => +t);
+    const ws = $('widgetSize');
+    ws.value = S.widgetSize > 0 ? S.widgetSize : 100;
+    fill(ws);
+    $('widgetSizeVal').value = ws.value;
+    slider('widgetSize', 'widgetSize', v => v, v => setVal('widgetSizeVal', v));
+    typeable('widgetSizeVal', 'widgetSize', 'widgetSize', t => +t);
+  }
+  if (page === 'pack' && S.iconPack) {
+    const scale = $('packScale');
+    scale.value = Number.isFinite(S.iconPackScale) ? S.iconPackScale : 100;
+    fill(scale);
+    $('packScaleVal').value = scale.value;
+    slider('packScale', 'iconPackScale', v => v, v => setVal('packScaleVal', v));
+    typeable('packScaleVal', 'packScale', 'iconPackScale', t => +t);
+  }
   if (dir) { p.classList.remove('anim', 'anim-back'); void p.offsetWidth; p.classList.add(dir < 0 ? 'anim-back' : 'anim'); }
   if (page === 'apps') { if (keep) $('q').value = keep; $('q').oninput = renderApps; APPS = await mdApps(); renderApps(); $('q').focus(); }
   if (page === 'picker') {
@@ -530,16 +1537,41 @@ async function renderPage(dir) {
     $('q').oninput = debounce(renderGrid, 120); renderGrid(); $('q').focus(); $('q').select();
   }
   if (page === 'dock') setupDockList();
+  if (page === 'launchpad') {
+    const c = $('lpCols'), ic = $('lpIcon');
+    c.value = S.launchpadCols || 6; ic.value = S.launchpadIcon || 60; fill(c); fill(ic);
+    $('lpColsVal').value = c.value; $('lpIconVal').value = ic.value;
+    slider('lpCols', 'launchpadCols', v => v, v => { setVal('lpColsVal', v); lpPreview(); });
+    slider('lpIcon', 'launchpadIcon', v => v, v => { setVal('lpIconVal', v); lpPreview(); });
+    typeable('lpColsVal', 'lpCols', 'launchpadCols', t => +t);
+    typeable('lpIconVal', 'lpIcon', 'launchpadIcon', t => +t);
+    lpPreview();
+  }
+  if (page === 'lpTabs') renderLpTabs();
+  if (page === 'lpIcons') { for (const k in lpIcons) delete lpIcons[k]; if (keep) $('q').value = keep; $('q').oninput = renderLpApps; LPAPPS = await mdLaunchApps(); renderLpApps(); $('q').focus(); }
   reportSize();
 }
 
 function openPage(p, back) {
+  p = MOVED[p] || p;
+  if (!FULL) { goFull(p); return; } // every page lives in All settings now
   page = p;
+  if (NAV.some(n => n[0] === p)) lastSection = p;
   document.body.classList.add('paged');
+  renderSide();
   renderPage(back ? -1 : 1);
 }
+function openApps(returnTo = 'icons') {
+  appsReturnPage = returnTo;
+  openPage('apps');
+}
 function closePage() {
+  if (FULL) { // back from a deeper page to its section; from a section to Quick settings
+    if (isTop(page)) { if (!WINDOWED) exitFull(); } else openPage(ownerOf(page), true);
+    return;
+  }
   page = null;
+  parkControls();
   document.body.classList.remove('paged');
   const m = $('main'); m.classList.remove('anim', 'anim-back'); void m.offsetWidth; m.classList.add('anim-back');
   apply();
@@ -556,7 +1588,7 @@ function renderApps() {
   const list = APPS.filter(a => !q || a.name.toLowerCase().includes(q));
   if (!list.length) { box.innerHTML = `<div class="empty">${APPS.length ? 'No matching apps' : 'No apps found'}</div>`; reportSize(); return; }
   box.innerHTML = list.map(a => `<div class="item"><img data-id="${esc(a.id)}" ${imgAttr(appIcons[a.id])}><span class="n">${esc(a.name)}</span>
-    <button class="pill ${a.pinned ? 'off' : ''}" data-t="${esc(a.id)}">${a.pinned ? '✓ In Dock' : 'Add'}</button></div>`).join('');
+    <button class="pill ${a.pinned ? 'off' : ''}" data-t="${esc(a.id)}">${a.pinned ? '✓ In Dock' : '+ Add'}</button></div>`).join('');
   box.querySelectorAll('img[data-id]').forEach(i => appObs.observe(i));
   box.querySelectorAll('button[data-t]').forEach(b => b.onclick = async () => {
     const pinned = await mdTogglePin(b.dataset.t);
@@ -570,33 +1602,226 @@ const packObs = new IntersectionObserver(es => es.forEach(e => {
   if (packIcons[n]) setIcon(img, packIcons[n]); else mdPackIcon(n).then(u => { if (u) packIcons[n] = u; setIcon(img, u); });
 }), { rootMargin: '160px' });
 
+const myIcons = {};
+const myObs = new IntersectionObserver(es => es.forEach(e => {
+  if (!e.isIntersecting) return; const img = e.target; myObs.unobserve(img); const n = img.dataset.m;
+  if (myIcons[n]) setIcon(img, myIcons[n]); else mdMyIcon(n).then(u => { if (u) myIcons[n] = u; setIcon(img, u); });
+}), { rootMargin: '160px' });
 async function renderGrid() {
   const g = $('grid'); if (!g) return;
-  const names = await mdPackIcons($('q').value.trim());
-  if (!names || !names.length) { g.innerHTML = '<div class="empty" style="grid-column:1/-1">No icons found</div>'; return; }
-  g.innerHTML = names.map(n => `<div class="cell" data-n="${esc(n)}"><img data-n="${esc(n)}" ${imgAttr(packIcons[n])}><span>${esc(n.replace(/_/g, ' '))}</span></div>`).join('');
-  g.querySelectorAll('img').forEach(i => packObs.observe(i));
-  g.querySelectorAll('.cell').forEach(c => c.onclick = async () => {
-    if (pickKey) { await mdSetKeyIcon(pickKey, c.dataset.n); pickKey = ''; closePage(); return; }
+  const q = $('q').value.trim();
+  // your own icons (Pictures › DG-Dock Icon) first, then the icon pack's
+  const [mine, names] = await Promise.all([mdMyIcons(q), S.iconPack ? mdPackIcons(q) : []]);
+  const label = t => `<div class="sec" style="grid-column:1/-1;margin:6px 0 2px">${t}</div>`;
+  let h = label('My icons') + (mine && mine.length
+    ? mine.map(n => `<div class="cell" data-m="${esc(n)}"><img data-m="${esc(n)}" ${imgAttr(myIcons[n])}><span>${esc(n.replace(/\.[a-z0-9]+$/i, ''))}</span></div>`).join('')
+    : `<div class="muted" style="grid-column:1/-1;padding:4px 2px 8px;font-size:12px">${q ? 'None match' : 'Put images in Pictures › DG-Dock Icon and they show up here.'} <button class="link" onclick="mdOpenIconsFolder()">Open folder</button></div>`);
+  if (S.iconPack) h += label('Icon pack') + (names && names.length ? names.map(n => `<div class="cell" data-n="${esc(n)}"><img data-n="${esc(n)}" ${imgAttr(packIcons[n])}><span>${esc(n.replace(/_/g, ' '))}</span></div>`).join('') : '<div class="muted" style="grid-column:1/-1;padding:4px 2px;font-size:12px">No icons found</div>');
+  g.innerHTML = h;
+  g.querySelectorAll('img[data-n]').forEach(i => packObs.observe(i));
+  g.querySelectorAll('img[data-m]').forEach(i => myObs.observe(i));
+  g.querySelectorAll('.cell[data-m]').forEach(c => c.onclick = async () => {
+    await mdSetMyIcon(pickKey ? -1 : pickIdx, pickKey || '', c.dataset.m);
+    if (pickKey) {
+      const returnPage = pickReturnPage; pickKey = ''; pickReturnPage = '';
+      S = await mdState(); apply();
+      if (returnPage) openPage(returnPage, true); else closePage();
+      return;
+    }
+    openPage('dock', true);
+  });
+  g.querySelectorAll('.cell[data-n]').forEach(c => c.onclick = async () => {
+    if (pickKey) {
+      const returnPage = pickReturnPage;
+      await mdSetKeyIcon(pickKey, c.dataset.n); pickKey = ''; pickReturnPage = '';
+      S = await mdState(); apply();
+      if (returnPage) openPage(returnPage, true); else closePage();
+      return;
+    }
     await mdSetPackIcon(pickIdx, c.dataset.n); openPage('dock', true);
   });
   reportSize();
 }
 
+// a little grid showing how many apps fit across, and how big they are
+function lpPreview() {
+  const box = $('lpPrev'); if (!box) return;
+  const cols = +($('lpCols') || {}).value || S.launchpadCols || 6, ic = +($('lpIcon') || {}).value || S.launchpadIcon || 60;
+  const names = S.launchpadNames !== false, cw = names ? Math.max(ic + 44, ic * 1.5) : ic + 22;
+  const k = Math.min(1, (box.clientWidth - 8) / (cols * cw));
+  const colours = ['#534AB7', '#1D9E75', '#D85A30', '#185FA5', '#993556', '#BA7517', '#0F6E56', '#7F77DD', '#378ADD', '#639922'];
+  box.style.setProperty('--k', k.toFixed(3));
+  box.innerHTML = `<div class="lp-prev-grid" style="grid-template-columns:repeat(${cols}, ${cw * k}px)">` + Array.from({ length: cols * 2 }, (_, i) =>
+    `<span style="width:${ic * k}px;height:${ic * k}px;background:${colours[i % colours.length]}"></span>`).join('') + `</div>`
+    + `<div class="lp-prev-cap">${cols} across · ${ic} px${k < 1 ? ' · shown smaller here' : ''}</div>`;
+}
+let LPTABS = [];
+async function renderLpTabs() {
+  const box = $('lpTabList'); if (!box) return;
+  LPTABS = await mdLaunchGroups();
+  box.innerHTML = LPTABS.map((g, i) => `<div class="item">${numBox(i, LPTABS.length, 'setLpTabPos', g.name)}<span class="n">${esc(g.name)}${g.user ? ' <small class="muted">· yours</small>' : ''}</span><small class="muted">${g.count} apps</small></div>`).join('');
+  reportSize();
+}
+async function setLpTabPos(i, to, keep) {
+  LPTABS = moveIn(LPTABS, i, to);
+  await mdSetLaunchOrder(LPTABS.map(g => g.name));
+  S = await mdState();
+  await renderLpTabs();
+  if (keep) { const b = document.querySelectorAll('#lpTabList input.pos')[to]; if (b) b.focus(); }
+}
+async function resetLpGroups() {
+  if (!await askConfirm('Undo your changes?', 'Put every app back in the category DG-Dock chose, remove the categories you made and reset the tab order?', 'Undo all')) return;
+  set('launchpadResetGroups', true);
+}
+let LPAPPS = [];
+const lpIcons = {};
+const lpObs = new IntersectionObserver(es => es.forEach(e => {
+  if (!e.isIntersecting) return; const img = e.target; lpObs.unobserve(img); const id = img.dataset.id, a = LPAPPS.find(x => x.id === id);
+  if (lpIcons[id]) setIcon(img, lpIcons[id]); else if (a) mdLaunchIcon(a.id, a.name).then(u => { if (u) lpIcons[id] = u; setIcon(img, u); });
+}), { rootMargin: '120px' });
+function renderLpApps() {
+  const box = $('lpApps'); if (!box) return;
+  const q = $('q').value.trim().toLowerCase();
+  const list = LPAPPS.filter(a => !q || a.name.toLowerCase().includes(q));
+  if (!list.length) { box.innerHTML = `<div class="empty">${LPAPPS.length ? 'No matching apps' : 'No apps found'}</div>`; reportSize(); return; }
+  box.innerHTML = list.map(a => `<div class="item"><img data-id="${esc(a.id)}" ${imgAttr(lpIcons[a.id])}><span class="n">${esc(a.name)}</span>
+    ${a.custom ? `<button class="pill" data-reset="${esc(a.id)}">Reset</button>` : ''}<button class="pill" data-change="${esc(a.id)}">Change</button></div>`).join('');
+  box.querySelectorAll('img[data-id]').forEach(i => lpObs.observe(i));
+  box.querySelectorAll('button[data-change]').forEach(b => b.onclick = () => {
+    const a = LPAPPS.find(x => x.id === b.dataset.change); if (!a) return;
+    const key = 'app:' + a.id.toLowerCase();
+    pickKey = key; pickName = a.name; pickIdx = -1; pickReturnPage = 'lpIcons';
+    pickPrefill = a.name; openPage('picker');
+  });
+  box.querySelectorAll('button[data-reset]').forEach(b => b.onclick = async () => {
+    await mdResetKeyIcon('app:' + b.dataset.reset.toLowerCase());
+    delete lpIcons[b.dataset.reset];
+    LPAPPS = await mdLaunchApps(); renderLpApps();
+  });
+  reportSize();
+}
+
 function debounce(f, ms) { let t; return () => { clearTimeout(t); t = setTimeout(f, ms); }; }
+function pickMediaPackIcon() {
+  if (!S) return;
+  pickPackIconFor('widget:media', 'Now Playing');
+}
+function pickPackIconFor(key, name) {
+  if (!S) return;
+  pickKey = key; pickName = name; pickIdx = -1; pickReturnPage = 'pack';
+  pickPrefill = ''; openPage('picker');
+}
+function cancelIconPicker() {
+  const returnPage = pickReturnPage;
+  pickKey = ''; pickReturnPage = '';
+  if (returnPage) openPage(returnPage, true); else closePage();
+}
 // picker for a tray app or a file in a folder card (rather than a pinned item)
 function pickFile() { if (pickKey) mdPickKeyFile(pickKey, pickName); else mdPick('icon', pickIdx); }
 async function useOriginal() {
-  if (pickKey) { await mdResetKeyIcon(pickKey); pickKey = ''; closePage(); return; }
+  if (pickKey) {
+    const returnPage = pickReturnPage;
+    await mdResetKeyIcon(pickKey); pickKey = ''; pickReturnPage = '';
+    S = await mdState(); apply();
+    if (returnPage) openPage(returnPage, true); else closePage();
+    return;
+  }
   resetIcon(pickIdx, true);
 }
 async function changeIcon(idx) {
   pickKey = '';
-  if (!S.iconPack) { mdPick('icon', idx); return; }
   if (!ITEMS.length) ITEMS = await mdDockItems();
   pickIdx = idx; openPage('picker');
 }
 async function removePin(i) { await mdRemovePin(i); renderPage(); }
+async function removePack(name) {
+  if (!await askConfirm('Remove icon pack?', 'Remove the icon pack “' + name + '” from DG-Dock?', 'Remove')) return;
+  if (!await mdRemovePack(name)) { await showNotice('Could not remove icon pack', 'DG-Dock could not remove that icon pack.'); return; }
+  S = await mdState(); apply(); renderPage();
+}
+
+let confirmResolver = null;
+function askConfirm(title, message, action) {
+  return new Promise(resolve => {
+    if (confirmResolver) answerConfirm(false);
+    confirmResolver = resolve;
+    $('confirmTitle').textContent = title;
+    $('confirmMessage').textContent = message;
+    $('confirmOk').textContent = action || 'Continue';
+    $('confirmCancel').style.display = '';
+    $('confirmOk').classList.add('danger');
+    const layer = $('confirmLayer'); layer.classList.add('show'); layer.setAttribute('aria-hidden', 'false');
+    $('confirmCancel').focus();
+  });
+}
+function showNotice(title, message) {
+  return new Promise(resolve => {
+    if (confirmResolver) answerConfirm(false);
+    confirmResolver = resolve;
+    $('confirmTitle').textContent = title;
+    $('confirmMessage').textContent = message;
+    $('confirmOk').textContent = 'OK';
+    $('confirmCancel').style.display = 'none';
+    $('confirmOk').classList.remove('danger');
+    const layer = $('confirmLayer'); layer.classList.add('show'); layer.setAttribute('aria-hidden', 'false');
+    $('confirmOk').focus();
+  });
+}
+function answerConfirm(accepted) {
+  const layer = $('confirmLayer');
+  if (!confirmResolver) return;
+  const resolve = confirmResolver; confirmResolver = null;
+  layer.classList.remove('show'); layer.setAttribute('aria-hidden', 'true');
+  $('confirmCancel').style.display = '';
+  $('confirmOk').classList.add('danger');
+  resolve(accepted);
+}
+async function setWidget(key, enabled, position, order) { await mdSetWidget(key, enabled, position, order); renderPage(); }
+let widgetPositionMenu = null;
+function closeWidgetPosition() {
+  if (!widgetPositionMenu) return;
+  const { menu, trigger } = widgetPositionMenu;
+  menu.remove();
+  trigger.setAttribute('aria-expanded', 'false');
+  widgetPositionMenu = null;
+}
+function openWidgetPosition(ev, key, enabled, current) {
+  ev.stopPropagation();
+  if (widgetPositionMenu) {
+    const same = widgetPositionMenu.trigger === ev.currentTarget;
+    closeWidgetPosition();
+    if (same) return;
+  }
+  const trigger = ev.currentTarget, rect = trigger.getBoundingClientRect();
+  const menu = document.createElement('div');
+  menu.className = 'position-menu'; menu.setAttribute('role', 'listbox');
+  menu.setAttribute('aria-label', 'Widget position');
+  const positions = current === 'custom' ? ['custom', 'left', 'middle', 'right'] : ['left', 'middle', 'right'];
+  for (const pos of positions) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = pos === 'custom' ? 'Custom (dragged)' : pos[0].toUpperCase() + pos.slice(1);
+    b.disabled = pos === 'custom';
+    b.setAttribute('role', 'option'); b.setAttribute('aria-selected', String(pos === current));
+    b.onclick = async e => { e.stopPropagation(); closeWidgetPosition(); await setWidget(key, enabled, pos, -1); };
+    b.onkeydown = e => { if (e.key === 'Escape') { e.preventDefault(); closeWidgetPosition(); trigger.focus(); } };
+    menu.appendChild(b);
+  }
+  document.body.appendChild(menu);
+  const left = Math.max(8, Math.min(rect.left, innerWidth - menu.offsetWidth - 8));
+  const top = rect.bottom + menu.offsetHeight + 4 < innerHeight ? rect.bottom + 4 : Math.max(8, rect.top - menu.offsetHeight - 4);
+  menu.style.left = left + 'px'; menu.style.top = top + 'px';
+  trigger.setAttribute('aria-expanded', 'true');
+  widgetPositionMenu = { menu, trigger };
+  (menu.querySelector('[aria-selected="true"]:not(:disabled)') || menu.querySelector('button:not(:disabled)'))?.focus();
+  setTimeout(() => document.addEventListener('pointerdown', e => {
+    if (widgetPositionMenu && !widgetPositionMenu.menu.contains(e.target) && e.target !== trigger) closeWidgetPosition();
+  }, { once: true }), 0);
+}
+async function moveWidget(key, delta) {
+  const ws = await mdWidgetItems(), w = ws.find(x => x.key === key); if (!w) return;
+  const next = Math.max(0, Math.min(ws.length - 1, w.order + delta));
+  await mdSetWidget(key, w.enabled, w.position, next); renderPage();
+}
 
 // ---------- Edit Dock: numbers, page headings, hold-and-drag to reorder ----------
 
@@ -741,16 +1966,25 @@ function reportSize() {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { if (page) { page === 'apps' || page === 'picker' ? openPage('dock', true) : closePage(); } else mdHide(); }
+  if (e.key === 'Escape') {
+    if (confirmResolver) { answerConfirm(false); e.preventDefault(); e.stopPropagation(); return; }
+    if (page) { page === 'apps' ? openPage(appsReturnPage, true) : page === 'picker' ? cancelIconPicker() : closePage(); } else mdHide();
+  }
+});
+document.getElementById('confirmLayer').addEventListener('click', e => {
+  if (e.target.id === 'confirmLayer') answerConfirm(false);
 });
 
 window.mdRefresh = async () => {
   if (window.mdAbout && !window.__ab) { window.__ab = await mdAbout(); $('donateBtn').style.display = window.__ab.donate ? '' : 'none'; }
   ENV = await mdEnv(); S = await mdState(); apply();
-  if (page === 'dock') renderPage();
+  if (page === 'colours') loadWall(); else WALL = null; // the wallpaper may have changed
+  if (page === 'dock' || page === 'pack' || page === 'lpIcons') renderPage();
+  // weather: show news (new readings, a saved address) but never while you're typing an address
+  if (page === 'weather' && !(document.activeElement && document.activeElement.closest && document.activeElement.closest('.wx-form'))) renderPage();
 };
-window.mdShown = () => { if (page) closePageQuiet(); window.mdRefresh(); };
-function closePageQuiet() { page = null; document.body.classList.remove('paged'); }
+window.mdShown = () => { if (FULL) exitFull(); else if (page) closePageQuiet(); window.mdRefresh(); };
+function closePageQuiet() { page = null; parkControls(); document.body.classList.remove('paged'); }
 window.mdCheckPending = async () => {
   const k = await mdTakePendingKey();
   if (k && k[0]) {
@@ -761,7 +1995,13 @@ window.mdCheckPending = async () => {
   const i = await mdTakePending();
   if (i >= 0) { ITEMS = await mdDockItems(); changeIcon(i); }
 };
-window.mdRefresh().then(() => window.mdCheckPending());
+window.mdGo = p => openPage(p);
+window.mdWinShown = async p => { await window.mdRefresh(); if (p) openPage(p); else if (page) renderPage(); await window.mdCheckPending(); };
+if (WINDOWED) {
+  FULL = true;
+  document.documentElement.classList.add('full');
+  window.mdRefresh().then(async () => { openPage((window.mdTakePage && await mdTakePage()) || 'home'); await window.mdCheckPending(); });
+} else window.mdRefresh().then(() => window.mdCheckPending());
 </script>
 </body>
 </html>

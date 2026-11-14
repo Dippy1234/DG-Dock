@@ -74,23 +74,78 @@ func use12h() bool {
 
 func (a *App) widgetItems() []*Item {
 	var out []*Item
+	defs := []struct {
+		key, widget, name string
+		width             float64
+	}{
+		{"w:clock", "clock", "Clock", 1.55}, {"w:status", "status", "Battery and Wi-Fi", 1.0},
+		{"w:media", "media", "Now playing", 2.1}, {"w:weather", "weather", "Weather", 1.0}, {"w:tray", "tray", "System tray", 1.0},
+	}
+	byKey := make(map[string]struct {
+		key, widget, name string
+		width             float64
+	}, len(defs))
+	for _, d := range defs {
+		byKey[d.widget] = d
+	}
+	order := make([]string, 0, len(defs))
+	seen := map[string]bool{}
+	for _, w := range a.cfg.WidgetOrder {
+		if _, ok := byKey[w]; ok && !seen[w] {
+			order = append(order, w)
+			seen[w] = true
+		}
+	}
+	for _, d := range defs {
+		if !seen[d.widget] {
+			order = append(order, d.widget)
+		}
+	}
+	hidden := map[string]bool{}
+	for _, w := range a.cfg.HiddenWidgets {
+		hidden[w] = true
+	}
 	add := func(key, w, name string, width float64) {
 		it, ok := a.items[key]
 		if !ok {
 			it = &Item{Key: key, Kind: KindWidget, Widget: w, Name: name, WidthB: width, Scale: 1, Appear: 1, WHot: -1, Section: 2}
 			a.items[key] = it
 		}
+		if w == "media" {
+			it.DefaultArt = a.mediaFallbackIcon()
+		}
+		if w == "tray" {
+			it.Icon = a.trayWidgetIcon()
+		}
+		if w == "weather" {
+			a.fillWeatherItem(it)
+		}
 		out = append(out, it)
 	}
-	add("w:clock", "clock", "Clock", 1.55)
-	add("w:status", "status", "Battery and Wi-Fi", 1.15)
-	add("w:media", "media", "Now playing", 2.1)
-	if !a.cfg.NoTray {
-		add("w:tray", "tray", "System tray", 1.0)
+	for _, w := range order {
+		if hidden[w] || w == "tray" && a.cfg.NoTray {
+			continue
+		}
+		d := byKey[w]
+		add(d.key, d.widget, d.name, d.width)
 	}
-	add("w:desktop", "desktop", "Show desktop", 0.32)
+	// a tile for each USB drive that's plugged in, at the start of the widgets
+	var usb []*Item
+	for _, dr := range a.usbDrives {
+		key := "w:usb:" + dr.Letter
+		it, ok := a.items[key]
+		if !ok {
+			it = &Item{Key: key, Kind: KindWidget, Widget: "usb", WidthB: 1, Scale: 1, WHot: -1, Section: 2}
+			a.items[key] = it
+		}
+		it.Name, it.UsbRoot = dr.Name(), dr.Root
+		usb = append(usb, it)
+	}
+	if len(usb) > 0 {
+		out = append(usb, out...)
+	}
 	if it := a.items["w:media"]; it != nil {
-		it.Art, it.WPlaying, it.WText1, it.WAccent = a.mediaArt, a.media.Playing, a.media.Title, a.mediaAccent
+		it.Art, it.DefaultArt, it.WPlaying, it.WText1, it.WAccent = a.mediaArt, a.mediaFallbackIcon(), a.media.Playing, a.media.Title, a.mediaAccent
 	}
 	a.updateWidgets()
 	return out
@@ -99,6 +154,7 @@ func (a *App) widgetItems() []*Item {
 // updateWidgets refreshes clock and battery text; returns true when anything changed.
 func (a *App) updateWidgets() bool {
 	changed := false
+	a.refreshWeather(false) // (only does anything when it's due)
 	now := time.Now()
 	if it := a.items["w:clock"]; it != nil {
 		t1 := now.Format("15:04")
@@ -137,19 +193,28 @@ func (a *App) updateWidgets() bool {
 
 func (a *App) widgetPop(it *Item) PopContent {
 	switch it.Widget {
+	case "weather":
+		return a.weatherPop()
+	case "usb":
+		return a.usbPop(it)
 	case "tray":
 		icons := tray.list()
 		if len(icons) == 0 {
 			return PopContent{Title: "System tray", Subtitle: "Apps that sit in the system tray show up here"}
 		}
-		pc := PopContent{Title: "System tray", Subtitle: "Click to open · right-click for more", Mode: PopGrid}
+		pc := PopContent{Title: "System tray", Subtitle: "Click an app to open · right-click for app options", Mode: PopTray}
+		// more apps than fit: scroll the list, a row at a time (GitHub request)
+		maxScroll := max(0, len(icons)-maxGrid)
+		a.trayScroll = max(0, min(a.trayScroll, maxScroll))
+		if maxScroll > 0 {
+			pc.Subtitle = fmt.Sprintf("%d apps · scroll for more · right-click for app options", len(icons))
+			pc.ScrollRows, pc.ScrollVis, pc.ScrollTop = len(icons), maxGrid, a.trayScroll
+			icons = icons[a.trayScroll : a.trayScroll+maxGrid]
+		}
 		for _, ic := range icons {
-			is, big := a.trayRowIcon(ic)
-			pc.Rows = append(pc.Rows, PopRow{Title: trayAppName(ic), Path: "tray:" + ic.key, Icon: is, Small: !big})
+			pc.Rows = append(pc.Rows, PopRow{Title: trayAppName(ic), Path: "tray:" + ic.key})
 		}
 		return pc
-	case "desktop":
-		return PopContent{Title: "Show desktop", Subtitle: "Click again to bring your windows back"}
 	case "clock":
 		return PopContent{Title: time.Now().Format("Monday 2 January 2006"), Subtitle: "Click for calendar and notifications"}
 	case "status":
@@ -199,27 +264,28 @@ func sendKey(vk uintptr) {
 
 func (a *App) widgetClick(it *Item) {
 	switch it.Widget {
-	case "desktop":
-		a.dock.PopItem, a.dock.PopTarget = nil, 0
-		pKeybdEvent.Call(0x5B, 0, 0, 0) // Win+D
-		pKeybdEvent.Call('D', 0, 0, 0)
-		pKeybdEvent.Call('D', 0, 2, 0)
-		pKeybdEvent.Call(0x5B, 0, 2, 0)
+	case "usb":
+		shellOpen(it.UsbRoot, "")
 	case "clock":
+		shellKeysHere()
 		pKeybdEvent.Call(0x5B, 0, 0, 0) // Win+N: notification centre with calendar
 		pKeybdEvent.Call('N', 0, 0, 0)
 		pKeybdEvent.Call('N', 0, 2, 0)
 		pKeybdEvent.Call(0x5B, 0, 2, 0)
 	case "status":
+		shellKeysHere()
 		pKeybdEvent.Call(0x5B, 0, 0, 0) // Win+A: quick settings (Wi-Fi, battery)
 		pKeybdEvent.Call('A', 0, 0, 0)
 		pKeybdEvent.Call('A', 0, 2, 0)
 		pKeybdEvent.Call(0x5B, 0, 2, 0)
 	case "battery":
 		shellOpen("ms-settings:batterysaver", "")
+	case "weather":
+		a.openWeather()
 	case "media":
 		cx, cy := getCursorPos()
-		u, _ := a.dock.toUV(float64(cx-a.winX), float64(cy-a.winY))
+		lx, ly := a.localPoint(cx, cy)
+		u, _ := a.dock.toUV(lx, ly)
 		switch a.dock.MediaButtonAt(it, u) {
 		case 3:
 			a.showMediaApp()
@@ -231,6 +297,14 @@ func (a *App) widgetClick(it *Item) {
 			a.mediaKey("media:next")
 		}
 	}
+}
+
+func (a *App) showDesktop() {
+	a.dock.PopItem, a.dock.PopTarget = nil, 0
+	pKeybdEvent.Call(0x5B, 0, 0, 0) // Win+D
+	pKeybdEvent.Call('D', 0, 0, 0)
+	pKeybdEvent.Call('D', 0, 2, 0)
+	pKeybdEvent.Call(0x5B, 0, 2, 0)
 }
 
 // ---------- folder stacks ----------
@@ -263,7 +337,7 @@ func (a *App) stackPop(it *Item) PopContent {
 	var list []ent
 	for _, e := range entries {
 		n := e.Name()
-		if strings.HasPrefix(n, ".") || strings.EqualFold(n, "desktop.ini") || strings.HasPrefix(n, "~$") {
+		if strings.HasPrefix(n, ".") || strings.EqualFold(n, "desktop.ini") || strings.HasPrefix(n, "~$") || strings.HasSuffix(n, ".dgdock-part") {
 			continue
 		}
 		if info, err := e.Info(); err == nil {
@@ -277,6 +351,12 @@ func (a *App) stackPop(it *Item) PopContent {
 		where = it.Name + " › " + title
 	}
 	addIcon := func(row *PopRow, p string) {
+		if fi, err := os.Stat(p); err == nil {
+			if is := a.packFileIcon(p, fi.IsDir()); is != nil { // the icon pack's folder and file glyphs
+				row.Icon = is
+				return
+			}
+		}
 		if is, ok := a.styled["small:"+p]; ok {
 			row.Icon = is
 		} else {
@@ -388,7 +468,27 @@ func (a *App) stackExplorer(lx, ly float64) bool {
 func (a *App) stackWheel(delta int) bool {
 	d := a.dock
 	cx, cy := getCursorPos()
-	if d.PopItem == nil || d.Pop.Mode != PopGrid || !d.InPop(float64(cx-a.winX), float64(cy-a.winY)) {
+	lx, ly := a.localPoint(cx, cy)
+	if d.PopItem != nil && d.Pop.Mode == PopTray && d.Pop.ScrollRows > d.Pop.ScrollVis && d.InPop(lx, ly) {
+		a.stackAcc += delta
+		step := 0
+		for a.stackAcc >= 120 {
+			a.stackAcc -= 120
+			step--
+		}
+		for a.stackAcc <= -120 {
+			a.stackAcc += 120
+			step++
+		}
+		if step != 0 {
+			a.trayScroll += step
+			d.Pop = a.popContent(d.PopItem)
+			d.PopHot = -1
+			a.needRender = true
+		}
+		return true
+	}
+	if d.PopItem == nil || d.Pop.Mode != PopGrid || !d.InPop(lx, ly) {
 		return false
 	}
 	a.stackAcc += delta
@@ -494,7 +594,8 @@ func (a *App) updateThumbs() {
 		if i >= maxThumbs || r.Min || r.Hwnd == 0 || r.TX1 <= r.TX0 {
 			continue
 		}
-		rc := RECT{a.winX + int32(math.Round(r.TX0)), a.winY + int32(math.Round(r.TY0)), a.winX + int32(math.Round(r.TX1)), a.winY + int32(math.Round(r.TY1))}
+		ox, oy := a.winX, a.winY
+		rc := RECT{ox + int32(math.Round(r.TX0)), oy + int32(math.Round(r.TY0)), ox + int32(math.Round(r.TX1)), oy + int32(math.Round(r.TY1))}
 		ws = append(ws, want{r.Hwnd, rc})
 		key += fmt.Sprintf("%x:%d,%d,%d,%d;", r.Hwnd, rc.Left, rc.Top, rc.Right, rc.Bottom)
 	}
@@ -564,7 +665,8 @@ func thumbWndProc(hwnd, msg, wp, lp uintptr) uintptr {
 		}
 		d := a.dock
 		cx, cy := getCursorPos()
-		if i := d.PopRowAt(float64(cx-a.winX), float64(cy-a.winY)); i >= 0 && i < len(d.Pop.Rows) {
+		lx, ly := a.localPoint(cx, cy)
+		if i := d.PopRowAt(lx, ly); i >= 0 && i < len(d.Pop.Rows) {
 			w := d.Pop.Rows[i].Hwnd
 			if uint32(msg) == WM_MBUTTONUP {
 				pPostMessageW.Call(w, WM_CLOSE, 0, 0)
@@ -601,7 +703,8 @@ func (a *App) onWheel(delta int16) {
 		return
 	}
 	cx, cy := getCursorPos()
-	idx := a.dock.ItemAt(float64(cx-a.winX), float64(cy-a.winY))
+	lx, ly := a.localPoint(cx, cy)
+	idx := a.dock.ItemAt(lx, ly)
 	if idx < 0 {
 		return
 	}
@@ -637,7 +740,7 @@ func (a *App) onWheel(delta int16) {
 // ---------- follow the mouse across monitors ----------
 
 func (a *App) checkMonitorSwitch(cx, cy int32) {
-	if a.cfg.MainDisplay || a.dragging() {
+	if a.cfg.MainDisplay || a.multiDock() || isSecondary() || a.dragging() {
 		return
 	}
 	pt := uintptr(uint32(cx)) | uintptr(uint32(cy))<<32
@@ -656,6 +759,8 @@ func (a *App) checkMonitorSwitch(cx, cy int32) {
 		atEdge = cx <= r.Left+2
 	case OrientRight:
 		atEdge = cx >= r.Right-3
+	case OrientTop:
+		atEdge = cy <= r.Top+2 || cy <= mi.RcWork.Top+1
 	default:
 		atEdge = cy >= r.Bottom-3 || cy >= mi.RcWork.Bottom-2
 	}
@@ -698,7 +803,8 @@ func (a *App) startWinEvents() {
 	if winEventCB == 0 {
 		winEventCB = windows.NewCallback(winEventProc)
 	}
-	for _, r := range [][2]uintptr{{0x8000, 0x8003}, {0x0016, 0x0017}, {0x8017, 0x8018}} {
+	// …and when a window has been dragged (maybe to another display)
+	for _, r := range [][2]uintptr{{0x8000, 0x8003}, {0x0016, 0x0017}, {0x8017, 0x8018}, {0x000B, 0x000B}} {
 		pSetWinEventHook.Call(r[0], r[1], 0, winEventCB, 0, 0, 0x0002) // OUTOFCONTEXT | SKIPOWNPROCESS
 	}
 }
@@ -735,4 +841,84 @@ func (a *App) refreshPop() {
 		d.Pop = np
 		a.needRender = true
 	}
+}
+
+var pMonitorFromWindow = user32.NewProc("MonitorFromWindow")
+
+// shellKeysHere makes Windows open Start, notifications and quick settings on the
+// display this dock is on. Windows opens them on the display whose taskbar was used
+// last, so we "use" that display's taskbar first by giving it the focus. While the
+// dock hides the taskbar, it's shown for that instant only and hidden again at once.
+func shellKeysHere() {
+	a := app
+	if a == nil || a.hwnd == 0 {
+		return
+	}
+	mon, _, _ := pMonitorFromWindow.Call(a.hwnd, 2) // nearest
+	var tb uintptr
+	for _, h := range trayWindows() {
+		if m, _, _ := pMonitorFromWindow.Call(h, 2); m == mon {
+			tb = h
+			break
+		}
+	}
+	if tb == 0 {
+		return // this display has no taskbar: Windows can only use the main display
+	}
+	hidden := false
+	if v, _, _ := pIsWindowVisible.Call(tb); v == 0 {
+		hidden = true
+		pShowWindow.Call(tb, SW_SHOWNA) // a hidden window can't be given the focus
+	}
+	pSetForegroundWindow.Call(tb)
+	if hidden {
+		pShowWindow.Call(tb, SW_HIDE) // and straight back out of sight, before the menu opens
+	}
+}
+
+// ensureTaskbarsOnAllDisplays turns on Windows' "Show my taskbar on all displays"
+// while there are docks on several displays and the dock hides the taskbar. Without
+// a taskbar on a display, Windows can only open Start there on the main display.
+// The taskbars stay hidden; the old setting is put back when the dock stops hiding it.
+func (a *App) ensureTaskbarsOnAllDisplays() {
+	const adv = `Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced`
+	k, err := registry.OpenKey(registry.CURRENT_USER, adv, registry.QUERY_VALUE|registry.SET_VALUE)
+	if err != nil {
+		return
+	}
+	defer k.Close()
+	cur, _, err := k.GetIntegerValue("MMTaskbarEnabled")
+	if err != nil {
+		cur = 0
+	}
+	if cur == 1 {
+		return
+	}
+	if a.cfg.PrevMMTaskbar < 0 {
+		a.cfg.PrevMMTaskbar = int(cur)
+		a.saveConfig()
+	}
+	if k.SetDWordValue("MMTaskbarEnabled", 1) == nil {
+		broadcastTraySettings()
+	}
+}
+
+func (a *App) restoreTaskbarsOnAllDisplays() {
+	if a.cfg.PrevMMTaskbar < 0 {
+		return
+	}
+	const adv = `Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced`
+	if k, err := registry.OpenKey(registry.CURRENT_USER, adv, registry.SET_VALUE); err == nil {
+		if k.SetDWordValue("MMTaskbarEnabled", uint32(a.cfg.PrevMMTaskbar)) == nil {
+			broadcastTraySettings()
+		}
+		k.Close()
+	}
+	a.cfg.PrevMMTaskbar = -1
+	a.saveConfig()
+}
+
+func broadcastTraySettings() {
+	var res uintptr
+	pSendMessageTimeoutW.Call(0xFFFF, 0x001A, 0, up(u16("TraySettings")), 2, 1000, uintptr(unsafe.Pointer(&res))) // WM_SETTINGCHANGE
 }
